@@ -1,0 +1,21 @@
+# started on Sun Mar 23 23:33:30 2025
+
+
+ Performance counter stats for './matrix_operations 2048 1':
+
+       289,741,329      cycles                                                                  (86.20%)
+       345,546,494      instructions                     #    1.19  insn per cycle              (86.10%)
+       155,915,816      cache-references                                                        (87.81%)
+        19,351,845      cache-misses                     #   12.41% of all cache refs           (88.32%)
+       153,604,872      L1-dcache-loads                                                         (88.29%)
+        19,772,806      L1-dcache-load-misses            #   12.87% of all L1-dcache accesses   (88.42%)
+   <not supported>      L1-dcache-stores                                                      
+           111,634      branch-misses                                                           (87.36%)
+       289,584,178      bus-cycles                                                              (73.71%)
+
+       0.179003180 seconds time elapsed
+
+       0.121094000 seconds user
+       0.030273000 seconds sys
+
+

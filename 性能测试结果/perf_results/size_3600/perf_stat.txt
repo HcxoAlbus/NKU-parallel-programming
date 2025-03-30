@@ -1,0 +1,21 @@
+# started on Sun Mar 23 23:34:04 2025
+
+
+ Performance counter stats for './matrix_operations 3600 1':
+
+     1,093,766,886      cycles                                                                  (87.42%)
+     1,035,116,007      instructions                     #    0.95  insn per cycle              (87.45%)
+       467,574,494      cache-references                                                        (87.42%)
+        59,818,952      cache-misses                     #   12.79% of all cache refs           (87.05%)
+       472,586,963      L1-dcache-loads                                                         (87.71%)
+        60,085,557      L1-dcache-load-misses            #   12.71% of all L1-dcache accesses   (88.10%)
+   <not supported>      L1-dcache-stores                                                      
+           230,296      branch-misses                                                           (87.60%)
+     1,091,519,073      bus-cycles                                                              (74.67%)
+
+       0.604791947 seconds time elapsed
+
+       0.466300000 seconds user
+       0.073477000 seconds sys
+
+

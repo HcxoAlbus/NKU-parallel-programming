@@ -1,0 +1,20 @@
+# started on Sun Mar 23 23:33:55 2025
+
+
+ Performance counter stats for './single_algo_1 3400':
+
+       727,459,072      cycles                                                                  (87.87%)
+       564,619,605      instructions                     #    0.78  insn per cycle              (86.77%)
+       209,705,881      L1-dcache-loads                                                         (87.31%)
+        41,086,256      L1-dcache-load-misses            #   19.59% of all L1-dcache accesses   (87.86%)
+                 0      LLC-loads                                                               (87.32%)
+        15,898,961      LLC-load-misses                                                         (87.96%)
+       209,174,987      dTLB-loads                                                              (87.87%)
+        39,327,019      dTLB-load-misses                 #   18.80% of all dTLB cache accesses  (74.92%)
+
+       0.390006655 seconds time elapsed
+
+       0.304062000 seconds user
+       0.050833000 seconds sys
+
+
