@@ -1,0 +1,2078 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 22  of event 'cycles:P'
+# Event count (approx.): 19862503
+#
+# Children      Self  Command        Shared Object          Symbol                                                                                                                                                                                                                                                                                                                                                                                                                    
+# ........  ........  .............  .....................  ..........................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+    78.13%     0.00%  single_algo_4  single_algo_4          [.] _start
+            |
+            ---_start
+               __libc_start_main
+               0xf00c7f4684c4
+               main
+               |          
+               |--57.01%--MatrixOperations::MatrixOperations(int)
+               |          |          
+               |           --27.98%--std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::vector<double, std::allocator<double> >*, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > >, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |                     std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |                     |          
+               |                     |--14.47%--operator new(unsigned long)
+               |                     |          malloc
+               |                     |          0xf00c7f4d5a98
+               |                     |          el0t_64_sync
+               |                     |          el0t_64_sync_handler
+               |                     |          el0_da
+               |                     |          do_mem_abort
+               |                     |          do_translation_fault
+               |                     |          do_page_fault
+               |                     |          handle_mm_fault
+               |                     |          __handle_mm_fault
+               |                     |          handle_pte_fault
+               |                     |          do_pte_missing
+               |                     |          do_anonymous_page
+               |                     |          |          
+               |                     |          |--8.39%--percpu_counter_add_batch
+               |                     |          |          
+               |                     |           --6.09%--alloc_anon_folio
+               |                     |          
+               |                     |--7.60%--0xf00c7f4e1d78
+               |                     |          el0t_64_sync
+               |                     |          el0t_64_sync_handler
+               |                     |          el0_da
+               |                     |          do_mem_abort
+               |                     |          do_translation_fault
+               |                     |          do_page_fault
+               |                     |          handle_mm_fault
+               |                     |          __handle_mm_fault
+               |                     |          handle_pte_fault
+               |                     |          do_pte_missing
+               |                     |          do_anonymous_page
+               |                     |          alloc_anon_folio
+               |                     |          
+               |                      --5.91%--0xf00c7f4e1d70
+               |                                el0t_64_sync
+               |                                el0t_64_sync_handler
+               |                                el0_da
+               |                                do_mem_abort
+               |                                do_translation_fault
+               |                                do_page_fault
+               |                                handle_mm_fault
+               |                                __handle_mm_fault
+               |                                handle_pte_fault
+               |                                do_pte_missing
+               |                                do_anonymous_page
+               |                                __mem_cgroup_charge
+               |                                percpu_ref_put_many.constprop.0
+               |          
+                --21.11%--MatrixOperations::algorithm2_unroll4()
+
+    78.13%     0.00%  single_algo_4  libc.so.6              [.] __libc_start_main
+            |
+            ---__libc_start_main
+               0xf00c7f4684c4
+               main
+               |          
+               |--57.01%--MatrixOperations::MatrixOperations(int)
+               |          |          
+               |           --27.98%--std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::vector<double, std::allocator<double> >*, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > >, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |                     std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |                     |          
+               |                     |--14.47%--operator new(unsigned long)
+               |                     |          malloc
+               |                     |          0xf00c7f4d5a98
+               |                     |          el0t_64_sync
+               |                     |          el0t_64_sync_handler
+               |                     |          el0_da
+               |                     |          do_mem_abort
+               |                     |          do_translation_fault
+               |                     |          do_page_fault
+               |                     |          handle_mm_fault
+               |                     |          __handle_mm_fault
+               |                     |          handle_pte_fault
+               |                     |          do_pte_missing
+               |                     |          do_anonymous_page
+               |                     |          |          
+               |                     |          |--8.39%--percpu_counter_add_batch
+               |                     |          |          
+               |                     |           --6.09%--alloc_anon_folio
+               |                     |          
+               |                     |--7.60%--0xf00c7f4e1d78
+               |                     |          el0t_64_sync
+               |                     |          el0t_64_sync_handler
+               |                     |          el0_da
+               |                     |          do_mem_abort
+               |                     |          do_translation_fault
+               |                     |          do_page_fault
+               |                     |          handle_mm_fault
+               |                     |          __handle_mm_fault
+               |                     |          handle_pte_fault
+               |                     |          do_pte_missing
+               |                     |          do_anonymous_page
+               |                     |          alloc_anon_folio
+               |                     |          
+               |                      --5.91%--0xf00c7f4e1d70
+               |                                el0t_64_sync
+               |                                el0t_64_sync_handler
+               |                                el0_da
+               |                                do_mem_abort
+               |                                do_translation_fault
+               |                                do_page_fault
+               |                                handle_mm_fault
+               |                                __handle_mm_fault
+               |                                handle_pte_fault
+               |                                do_pte_missing
+               |                                do_anonymous_page
+               |                                __mem_cgroup_charge
+               |                                percpu_ref_put_many.constprop.0
+               |          
+                --21.11%--MatrixOperations::algorithm2_unroll4()
+
+    78.13%     0.00%  single_algo_4  libc.so.6              [.] 0x0000f00c7f4684c4
+            |
+            ---0xf00c7f4684c4
+               main
+               |          
+               |--57.01%--MatrixOperations::MatrixOperations(int)
+               |          |          
+               |           --27.98%--std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::vector<double, std::allocator<double> >*, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > >, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |                     std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |                     |          
+               |                     |--14.47%--operator new(unsigned long)
+               |                     |          malloc
+               |                     |          0xf00c7f4d5a98
+               |                     |          el0t_64_sync
+               |                     |          el0t_64_sync_handler
+               |                     |          el0_da
+               |                     |          do_mem_abort
+               |                     |          do_translation_fault
+               |                     |          do_page_fault
+               |                     |          handle_mm_fault
+               |                     |          __handle_mm_fault
+               |                     |          handle_pte_fault
+               |                     |          do_pte_missing
+               |                     |          do_anonymous_page
+               |                     |          |          
+               |                     |          |--8.39%--percpu_counter_add_batch
+               |                     |          |          
+               |                     |           --6.09%--alloc_anon_folio
+               |                     |          
+               |                     |--7.60%--0xf00c7f4e1d78
+               |                     |          el0t_64_sync
+               |                     |          el0t_64_sync_handler
+               |                     |          el0_da
+               |                     |          do_mem_abort
+               |                     |          do_translation_fault
+               |                     |          do_page_fault
+               |                     |          handle_mm_fault
+               |                     |          __handle_mm_fault
+               |                     |          handle_pte_fault
+               |                     |          do_pte_missing
+               |                     |          do_anonymous_page
+               |                     |          alloc_anon_folio
+               |                     |          
+               |                      --5.91%--0xf00c7f4e1d70
+               |                                el0t_64_sync
+               |                                el0t_64_sync_handler
+               |                                el0_da
+               |                                do_mem_abort
+               |                                do_translation_fault
+               |                                do_page_fault
+               |                                handle_mm_fault
+               |                                __handle_mm_fault
+               |                                handle_pte_fault
+               |                                do_pte_missing
+               |                                do_anonymous_page
+               |                                __mem_cgroup_charge
+               |                                percpu_ref_put_many.constprop.0
+               |          
+                --21.11%--MatrixOperations::algorithm2_unroll4()
+
+    78.13%     0.00%  single_algo_4  single_algo_4          [.] main
+            |
+            ---main
+               |          
+               |--57.01%--MatrixOperations::MatrixOperations(int)
+               |          |          
+               |           --27.98%--std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::vector<double, std::allocator<double> >*, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > >, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |                     std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |                     |          
+               |                     |--14.47%--operator new(unsigned long)
+               |                     |          malloc
+               |                     |          0xf00c7f4d5a98
+               |                     |          el0t_64_sync
+               |                     |          el0t_64_sync_handler
+               |                     |          el0_da
+               |                     |          do_mem_abort
+               |                     |          do_translation_fault
+               |                     |          do_page_fault
+               |                     |          handle_mm_fault
+               |                     |          __handle_mm_fault
+               |                     |          handle_pte_fault
+               |                     |          do_pte_missing
+               |                     |          do_anonymous_page
+               |                     |          |          
+               |                     |          |--8.39%--percpu_counter_add_batch
+               |                     |          |          
+               |                     |           --6.09%--alloc_anon_folio
+               |                     |          
+               |                     |--7.60%--0xf00c7f4e1d78
+               |                     |          el0t_64_sync
+               |                     |          el0t_64_sync_handler
+               |                     |          el0_da
+               |                     |          do_mem_abort
+               |                     |          do_translation_fault
+               |                     |          do_page_fault
+               |                     |          handle_mm_fault
+               |                     |          __handle_mm_fault
+               |                     |          handle_pte_fault
+               |                     |          do_pte_missing
+               |                     |          do_anonymous_page
+               |                     |          alloc_anon_folio
+               |                     |          
+               |                      --5.91%--0xf00c7f4e1d70
+               |                                el0t_64_sync
+               |                                el0t_64_sync_handler
+               |                                el0_da
+               |                                do_mem_abort
+               |                                do_translation_fault
+               |                                do_page_fault
+               |                                handle_mm_fault
+               |                                __handle_mm_fault
+               |                                handle_pte_fault
+               |                                do_pte_missing
+               |                                do_anonymous_page
+               |                                __mem_cgroup_charge
+               |                                percpu_ref_put_many.constprop.0
+               |          
+                --21.11%--MatrixOperations::algorithm2_unroll4()
+
+    57.01%    29.04%  single_algo_4  single_algo_4          [.] MatrixOperations::MatrixOperations(int)
+            |          
+            |--29.04%--_start
+            |          __libc_start_main
+            |          0xf00c7f4684c4
+            |          main
+            |          MatrixOperations::MatrixOperations(int)
+            |          
+             --27.98%--MatrixOperations::MatrixOperations(int)
+                       std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::vector<double, std::allocator<double> >*, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > >, unsigned long, std::vector<double, std::allocator<double> > const&)
+                       std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+                       |          
+                       |--14.47%--operator new(unsigned long)
+                       |          malloc
+                       |          0xf00c7f4d5a98
+                       |          el0t_64_sync
+                       |          el0t_64_sync_handler
+                       |          el0_da
+                       |          do_mem_abort
+                       |          do_translation_fault
+                       |          do_page_fault
+                       |          handle_mm_fault
+                       |          __handle_mm_fault
+                       |          handle_pte_fault
+                       |          do_pte_missing
+                       |          do_anonymous_page
+                       |          |          
+                       |          |--8.39%--percpu_counter_add_batch
+                       |          |          
+                       |           --6.09%--alloc_anon_folio
+                       |          
+                       |--7.60%--0xf00c7f4e1d78
+                       |          el0t_64_sync
+                       |          el0t_64_sync_handler
+                       |          el0_da
+                       |          do_mem_abort
+                       |          do_translation_fault
+                       |          do_page_fault
+                       |          handle_mm_fault
+                       |          __handle_mm_fault
+                       |          handle_pte_fault
+                       |          do_pte_missing
+                       |          do_anonymous_page
+                       |          alloc_anon_folio
+                       |          
+                        --5.91%--0xf00c7f4e1d70
+                                  el0t_64_sync
+                                  el0t_64_sync_handler
+                                  el0_da
+                                  do_mem_abort
+                                  do_translation_fault
+                                  do_page_fault
+                                  handle_mm_fault
+                                  __handle_mm_fault
+                                  handle_pte_fault
+                                  do_pte_missing
+                                  do_anonymous_page
+                                  __mem_cgroup_charge
+                                  percpu_ref_put_many.constprop.0
+
+    43.93%     0.00%  single_algo_4  [kernel.kallsyms]      [k] el0t_64_sync
+            |
+            ---el0t_64_sync
+               el0t_64_sync_handler
+               |          
+               |--27.98%--el0_da
+               |          do_mem_abort
+               |          do_translation_fault
+               |          do_page_fault
+               |          handle_mm_fault
+               |          __handle_mm_fault
+               |          handle_pte_fault
+               |          do_pte_missing
+               |          do_anonymous_page
+               |          |          
+               |          |--13.68%--alloc_anon_folio
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --5.91%--__mem_cgroup_charge
+               |                     percpu_ref_put_many.constprop.0
+               |          
+               |--15.01%--el0_svc
+               |          do_el0_svc
+               |          el0_svc_common.constprop.0
+               |          invoke_syscall
+               |          |          
+               |          |--10.94%--__arm64_sys_exit_group
+               |          |          do_group_exit
+               |          |          do_exit
+               |          |          exit_mm
+               |          |          mmput
+               |          |          __mmput
+               |          |          exit_mmap
+               |          |          free_pgtables
+               |          |          free_pgd_range
+               |          |          free_pud_range
+               |          |          
+               |          |--3.03%--__arm64_sys_mprotect
+               |          |          do_mprotect_pkey.constprop.0
+               |          |          mprotect_fixup
+               |          |          vma_modify
+               |          |          __split_vma
+               |          |          vma_prepare
+               |          |          vma_interval_tree_insert
+               |          |          
+               |           --1.04%--__arm64_sys_execve
+               |                     do_execveat_common.isra.0
+               |                     bprm_execve
+               |                     bprm_execve.part.0
+               |                     exec_binprm
+               |                     search_binary_handler
+               |                     load_elf_binary
+               |                     |          
+               |                     |--0.52%--load_elf_interp
+               |                     |          elf_load
+               |                     |          vm_mmap
+               |                     |          vm_mmap_pgoff
+               |                     |          do_mmap
+               |                     |          mmap_region
+               |                     |          vm_area_alloc
+               |                     |          kmem_cache_alloc
+               |                     |          arch_local_irq_restore
+               |                     |          
+               |                      --0.52%--setup_arg_pages
+               |                                expand_stack_locked
+               |                                expand_downwards
+               |                                perf_event_mmap
+               |                                perf_event_mmap_event
+               |          
+                --0.95%--el0_ia
+                          do_mem_abort
+                          do_translation_fault
+                          do_page_fault
+                          handle_mm_fault
+                          __handle_mm_fault
+                          handle_pte_fault
+                          do_pte_missing
+                          do_read_fault
+                          filemap_map_pages
+                          set_pte_range
+                          percpu_counter_add_batch
+
+    43.93%     0.00%  single_algo_4  [kernel.kallsyms]      [k] el0t_64_sync_handler
+            |
+            ---el0t_64_sync_handler
+               |          
+               |--27.98%--el0_da
+               |          do_mem_abort
+               |          do_translation_fault
+               |          do_page_fault
+               |          handle_mm_fault
+               |          __handle_mm_fault
+               |          handle_pte_fault
+               |          do_pte_missing
+               |          do_anonymous_page
+               |          |          
+               |          |--13.68%--alloc_anon_folio
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --5.91%--__mem_cgroup_charge
+               |                     percpu_ref_put_many.constprop.0
+               |          
+               |--15.01%--el0_svc
+               |          do_el0_svc
+               |          el0_svc_common.constprop.0
+               |          invoke_syscall
+               |          |          
+               |          |--10.94%--__arm64_sys_exit_group
+               |          |          do_group_exit
+               |          |          do_exit
+               |          |          exit_mm
+               |          |          mmput
+               |          |          __mmput
+               |          |          exit_mmap
+               |          |          free_pgtables
+               |          |          free_pgd_range
+               |          |          free_pud_range
+               |          |          
+               |          |--3.03%--__arm64_sys_mprotect
+               |          |          do_mprotect_pkey.constprop.0
+               |          |          mprotect_fixup
+               |          |          vma_modify
+               |          |          __split_vma
+               |          |          vma_prepare
+               |          |          vma_interval_tree_insert
+               |          |          
+               |           --1.04%--__arm64_sys_execve
+               |                     do_execveat_common.isra.0
+               |                     bprm_execve
+               |                     bprm_execve.part.0
+               |                     exec_binprm
+               |                     search_binary_handler
+               |                     load_elf_binary
+               |                     |          
+               |                     |--0.52%--load_elf_interp
+               |                     |          elf_load
+               |                     |          vm_mmap
+               |                     |          vm_mmap_pgoff
+               |                     |          do_mmap
+               |                     |          mmap_region
+               |                     |          vm_area_alloc
+               |                     |          kmem_cache_alloc
+               |                     |          arch_local_irq_restore
+               |                     |          
+               |                      --0.52%--setup_arg_pages
+               |                                expand_stack_locked
+               |                                expand_downwards
+               |                                perf_event_mmap
+               |                                perf_event_mmap_event
+               |          
+                --0.95%--el0_ia
+                          do_mem_abort
+                          do_translation_fault
+                          do_page_fault
+                          handle_mm_fault
+                          __handle_mm_fault
+                          handle_pte_fault
+                          do_pte_missing
+                          do_read_fault
+                          filemap_map_pages
+                          set_pte_range
+                          percpu_counter_add_batch
+
+    28.92%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_mem_abort
+            |
+            ---do_mem_abort
+               do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               |          
+               |--27.98%--do_anonymous_page
+               |          |          
+               |          |--13.68%--alloc_anon_folio
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --5.91%--__mem_cgroup_charge
+               |                     percpu_ref_put_many.constprop.0
+               |          
+                --0.95%--do_read_fault
+                          filemap_map_pages
+                          set_pte_range
+                          percpu_counter_add_batch
+
+    28.92%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_translation_fault
+            |
+            ---do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               |          
+               |--27.98%--do_anonymous_page
+               |          |          
+               |          |--13.68%--alloc_anon_folio
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --5.91%--__mem_cgroup_charge
+               |                     percpu_ref_put_many.constprop.0
+               |          
+                --0.95%--do_read_fault
+                          filemap_map_pages
+                          set_pte_range
+                          percpu_counter_add_batch
+
+    28.92%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_page_fault
+            |
+            ---do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               |          
+               |--27.98%--do_anonymous_page
+               |          |          
+               |          |--13.68%--alloc_anon_folio
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --5.91%--__mem_cgroup_charge
+               |                     percpu_ref_put_many.constprop.0
+               |          
+                --0.95%--do_read_fault
+                          filemap_map_pages
+                          set_pte_range
+                          percpu_counter_add_batch
+
+    28.92%     0.00%  single_algo_4  [kernel.kallsyms]      [k] handle_mm_fault
+            |
+            ---handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               |          
+               |--27.98%--do_anonymous_page
+               |          |          
+               |          |--13.68%--alloc_anon_folio
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --5.91%--__mem_cgroup_charge
+               |                     percpu_ref_put_many.constprop.0
+               |          
+                --0.95%--do_read_fault
+                          filemap_map_pages
+                          set_pte_range
+                          percpu_counter_add_batch
+
+    28.92%     0.00%  single_algo_4  [kernel.kallsyms]      [k] __handle_mm_fault
+            |
+            ---__handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               |          
+               |--27.98%--do_anonymous_page
+               |          |          
+               |          |--13.68%--alloc_anon_folio
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --5.91%--__mem_cgroup_charge
+               |                     percpu_ref_put_many.constprop.0
+               |          
+                --0.95%--do_read_fault
+                          filemap_map_pages
+                          set_pte_range
+                          percpu_counter_add_batch
+
+    28.92%     0.00%  single_algo_4  [kernel.kallsyms]      [k] handle_pte_fault
+            |
+            ---handle_pte_fault
+               do_pte_missing
+               |          
+               |--27.98%--do_anonymous_page
+               |          |          
+               |          |--13.68%--alloc_anon_folio
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --5.91%--__mem_cgroup_charge
+               |                     percpu_ref_put_many.constprop.0
+               |          
+                --0.95%--do_read_fault
+                          filemap_map_pages
+                          set_pte_range
+                          percpu_counter_add_batch
+
+    28.92%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_pte_missing
+            |
+            ---do_pte_missing
+               |          
+               |--27.98%--do_anonymous_page
+               |          |          
+               |          |--13.68%--alloc_anon_folio
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --5.91%--__mem_cgroup_charge
+               |                     percpu_ref_put_many.constprop.0
+               |          
+                --0.95%--do_read_fault
+                          filemap_map_pages
+                          set_pte_range
+                          percpu_counter_add_batch
+
+    27.98%     0.00%  single_algo_4  single_algo_4          [.] std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::vector<double, std::allocator<double> >*, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > >, unsigned long, std::vector<double, std::allocator<double> > const&)
+            |
+            ---std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::vector<double, std::allocator<double> >*, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > >, unsigned long, std::vector<double, std::allocator<double> > const&)
+               std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |          
+               |--14.47%--operator new(unsigned long)
+               |          malloc
+               |          0xf00c7f4d5a98
+               |          el0t_64_sync
+               |          el0t_64_sync_handler
+               |          el0_da
+               |          do_mem_abort
+               |          do_translation_fault
+               |          do_page_fault
+               |          handle_mm_fault
+               |          __handle_mm_fault
+               |          handle_pte_fault
+               |          do_pte_missing
+               |          do_anonymous_page
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --6.09%--alloc_anon_folio
+               |          
+               |--7.60%--0xf00c7f4e1d78
+               |          el0t_64_sync
+               |          el0t_64_sync_handler
+               |          el0_da
+               |          do_mem_abort
+               |          do_translation_fault
+               |          do_page_fault
+               |          handle_mm_fault
+               |          __handle_mm_fault
+               |          handle_pte_fault
+               |          do_pte_missing
+               |          do_anonymous_page
+               |          alloc_anon_folio
+               |          
+                --5.91%--0xf00c7f4e1d70
+                          el0t_64_sync
+                          el0t_64_sync_handler
+                          el0_da
+                          do_mem_abort
+                          do_translation_fault
+                          do_page_fault
+                          handle_mm_fault
+                          __handle_mm_fault
+                          handle_pte_fault
+                          do_pte_missing
+                          do_anonymous_page
+                          __mem_cgroup_charge
+                          percpu_ref_put_many.constprop.0
+
+    27.98%     0.00%  single_algo_4  single_algo_4          [.] std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+            |
+            ---std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |          
+               |--14.47%--operator new(unsigned long)
+               |          malloc
+               |          0xf00c7f4d5a98
+               |          el0t_64_sync
+               |          el0t_64_sync_handler
+               |          el0_da
+               |          do_mem_abort
+               |          do_translation_fault
+               |          do_page_fault
+               |          handle_mm_fault
+               |          __handle_mm_fault
+               |          handle_pte_fault
+               |          do_pte_missing
+               |          do_anonymous_page
+               |          |          
+               |          |--8.39%--percpu_counter_add_batch
+               |          |          
+               |           --6.09%--alloc_anon_folio
+               |          
+               |--7.60%--0xf00c7f4e1d78
+               |          el0t_64_sync
+               |          el0t_64_sync_handler
+               |          el0_da
+               |          do_mem_abort
+               |          do_translation_fault
+               |          do_page_fault
+               |          handle_mm_fault
+               |          __handle_mm_fault
+               |          handle_pte_fault
+               |          do_pte_missing
+               |          do_anonymous_page
+               |          alloc_anon_folio
+               |          
+                --5.91%--0xf00c7f4e1d70
+                          el0t_64_sync
+                          el0t_64_sync_handler
+                          el0_da
+                          do_mem_abort
+                          do_translation_fault
+                          do_page_fault
+                          handle_mm_fault
+                          __handle_mm_fault
+                          handle_pte_fault
+                          do_pte_missing
+                          do_anonymous_page
+                          __mem_cgroup_charge
+                          percpu_ref_put_many.constprop.0
+
+    27.98%     0.00%  single_algo_4  [kernel.kallsyms]      [k] el0_da
+            |
+            ---el0_da
+               do_mem_abort
+               do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               do_anonymous_page
+               |          
+               |--13.68%--alloc_anon_folio
+               |          
+               |--8.39%--percpu_counter_add_batch
+               |          
+                --5.91%--__mem_cgroup_charge
+                          percpu_ref_put_many.constprop.0
+
+    27.98%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_anonymous_page
+            |
+            ---do_anonymous_page
+               |          
+               |--13.68%--alloc_anon_folio
+               |          
+               |--8.39%--percpu_counter_add_batch
+               |          
+                --5.91%--__mem_cgroup_charge
+                          percpu_ref_put_many.constprop.0
+
+    21.11%    21.11%  single_algo_4  single_algo_4          [.] MatrixOperations::algorithm2_unroll4()
+            |
+            ---_start
+               __libc_start_main
+               0xf00c7f4684c4
+               main
+               MatrixOperations::algorithm2_unroll4()
+
+    15.01%     0.00%  single_algo_4  [kernel.kallsyms]      [k] el0_svc
+            |
+            ---el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               |          
+               |--10.94%--__arm64_sys_exit_group
+               |          do_group_exit
+               |          do_exit
+               |          exit_mm
+               |          mmput
+               |          __mmput
+               |          exit_mmap
+               |          free_pgtables
+               |          free_pgd_range
+               |          free_pud_range
+               |          
+               |--3.03%--__arm64_sys_mprotect
+               |          do_mprotect_pkey.constprop.0
+               |          mprotect_fixup
+               |          vma_modify
+               |          __split_vma
+               |          vma_prepare
+               |          vma_interval_tree_insert
+               |          
+                --1.04%--__arm64_sys_execve
+                          do_execveat_common.isra.0
+                          bprm_execve
+                          bprm_execve.part.0
+                          exec_binprm
+                          search_binary_handler
+                          load_elf_binary
+                          |          
+                          |--0.52%--load_elf_interp
+                          |          elf_load
+                          |          vm_mmap
+                          |          vm_mmap_pgoff
+                          |          do_mmap
+                          |          mmap_region
+                          |          vm_area_alloc
+                          |          kmem_cache_alloc
+                          |          arch_local_irq_restore
+                          |          
+                           --0.52%--setup_arg_pages
+                                     expand_stack_locked
+                                     expand_downwards
+                                     perf_event_mmap
+                                     perf_event_mmap_event
+
+    15.01%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_el0_svc
+            |
+            ---do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               |          
+               |--10.94%--__arm64_sys_exit_group
+               |          do_group_exit
+               |          do_exit
+               |          exit_mm
+               |          mmput
+               |          __mmput
+               |          exit_mmap
+               |          free_pgtables
+               |          free_pgd_range
+               |          free_pud_range
+               |          
+               |--3.03%--__arm64_sys_mprotect
+               |          do_mprotect_pkey.constprop.0
+               |          mprotect_fixup
+               |          vma_modify
+               |          __split_vma
+               |          vma_prepare
+               |          vma_interval_tree_insert
+               |          
+                --1.04%--__arm64_sys_execve
+                          do_execveat_common.isra.0
+                          bprm_execve
+                          bprm_execve.part.0
+                          exec_binprm
+                          search_binary_handler
+                          load_elf_binary
+                          |          
+                          |--0.52%--load_elf_interp
+                          |          elf_load
+                          |          vm_mmap
+                          |          vm_mmap_pgoff
+                          |          do_mmap
+                          |          mmap_region
+                          |          vm_area_alloc
+                          |          kmem_cache_alloc
+                          |          arch_local_irq_restore
+                          |          
+                           --0.52%--setup_arg_pages
+                                     expand_stack_locked
+                                     expand_downwards
+                                     perf_event_mmap
+                                     perf_event_mmap_event
+
+    15.01%     0.00%  single_algo_4  [kernel.kallsyms]      [k] el0_svc_common.constprop.0
+            |
+            ---el0_svc_common.constprop.0
+               invoke_syscall
+               |          
+               |--10.94%--__arm64_sys_exit_group
+               |          do_group_exit
+               |          do_exit
+               |          exit_mm
+               |          mmput
+               |          __mmput
+               |          exit_mmap
+               |          free_pgtables
+               |          free_pgd_range
+               |          free_pud_range
+               |          
+               |--3.03%--__arm64_sys_mprotect
+               |          do_mprotect_pkey.constprop.0
+               |          mprotect_fixup
+               |          vma_modify
+               |          __split_vma
+               |          vma_prepare
+               |          vma_interval_tree_insert
+               |          
+                --1.04%--__arm64_sys_execve
+                          do_execveat_common.isra.0
+                          bprm_execve
+                          bprm_execve.part.0
+                          exec_binprm
+                          search_binary_handler
+                          load_elf_binary
+                          |          
+                          |--0.52%--load_elf_interp
+                          |          elf_load
+                          |          vm_mmap
+                          |          vm_mmap_pgoff
+                          |          do_mmap
+                          |          mmap_region
+                          |          vm_area_alloc
+                          |          kmem_cache_alloc
+                          |          arch_local_irq_restore
+                          |          
+                           --0.52%--setup_arg_pages
+                                     expand_stack_locked
+                                     expand_downwards
+                                     perf_event_mmap
+                                     perf_event_mmap_event
+
+    15.01%     0.00%  single_algo_4  [kernel.kallsyms]      [k] invoke_syscall
+            |
+            ---invoke_syscall
+               |          
+               |--10.94%--__arm64_sys_exit_group
+               |          do_group_exit
+               |          do_exit
+               |          exit_mm
+               |          mmput
+               |          __mmput
+               |          exit_mmap
+               |          free_pgtables
+               |          free_pgd_range
+               |          free_pud_range
+               |          
+               |--3.03%--__arm64_sys_mprotect
+               |          do_mprotect_pkey.constprop.0
+               |          mprotect_fixup
+               |          vma_modify
+               |          __split_vma
+               |          vma_prepare
+               |          vma_interval_tree_insert
+               |          
+                --1.04%--__arm64_sys_execve
+                          do_execveat_common.isra.0
+                          bprm_execve
+                          bprm_execve.part.0
+                          exec_binprm
+                          search_binary_handler
+                          load_elf_binary
+                          |          
+                          |--0.52%--load_elf_interp
+                          |          elf_load
+                          |          vm_mmap
+                          |          vm_mmap_pgoff
+                          |          do_mmap
+                          |          mmap_region
+                          |          vm_area_alloc
+                          |          kmem_cache_alloc
+                          |          arch_local_irq_restore
+                          |          
+                           --0.52%--setup_arg_pages
+                                     expand_stack_locked
+                                     expand_downwards
+                                     perf_event_mmap
+                                     perf_event_mmap_event
+
+    14.47%     0.00%  single_algo_4  libstdc++.so.6.0.33    [.] operator new(unsigned long)
+            |
+            ---operator new(unsigned long)
+               malloc
+               0xf00c7f4d5a98
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_da
+               do_mem_abort
+               do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               do_anonymous_page
+               |          
+               |--8.39%--percpu_counter_add_batch
+               |          
+                --6.09%--alloc_anon_folio
+
+    14.47%     0.00%  single_algo_4  libc.so.6              [.] malloc
+            |
+            ---malloc
+               0xf00c7f4d5a98
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_da
+               do_mem_abort
+               do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               do_anonymous_page
+               |          
+               |--8.39%--percpu_counter_add_batch
+               |          
+                --6.09%--alloc_anon_folio
+
+    14.47%     0.00%  single_algo_4  libc.so.6              [.] 0x0000f00c7f4d5a98
+            |
+            ---0xf00c7f4d5a98
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_da
+               do_mem_abort
+               do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               do_anonymous_page
+               |          
+               |--8.39%--percpu_counter_add_batch
+               |          
+                --6.09%--alloc_anon_folio
+
+    13.68%    13.68%  single_algo_4  [kernel.kallsyms]      [k] alloc_anon_folio
+            |
+            ---_start
+               __libc_start_main
+               0xf00c7f4684c4
+               main
+               MatrixOperations::MatrixOperations(int)
+               std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::vector<double, std::allocator<double> >*, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > >, unsigned long, std::vector<double, std::allocator<double> > const&)
+               std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+               |          
+               |--7.60%--0xf00c7f4e1d78
+               |          el0t_64_sync
+               |          el0t_64_sync_handler
+               |          el0_da
+               |          do_mem_abort
+               |          do_translation_fault
+               |          do_page_fault
+               |          handle_mm_fault
+               |          __handle_mm_fault
+               |          handle_pte_fault
+               |          do_pte_missing
+               |          do_anonymous_page
+               |          alloc_anon_folio
+               |          
+                --6.09%--operator new(unsigned long)
+                          malloc
+                          0xf00c7f4d5a98
+                          el0t_64_sync
+                          el0t_64_sync_handler
+                          el0_da
+                          do_mem_abort
+                          do_translation_fault
+                          do_page_fault
+                          handle_mm_fault
+                          __handle_mm_fault
+                          handle_pte_fault
+                          do_pte_missing
+                          do_anonymous_page
+                          alloc_anon_folio
+
+    10.94%    10.94%  single_algo_4  [kernel.kallsyms]      [k] free_pud_range
+            |
+            ---el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_exit_group
+               do_group_exit
+               do_exit
+               exit_mm
+               mmput
+               __mmput
+               exit_mmap
+               free_pgtables
+               free_pgd_range
+               free_pud_range
+
+    10.94%     0.00%  single_algo_4  [kernel.kallsyms]      [k] __arm64_sys_exit_group
+            |
+            ---__arm64_sys_exit_group
+               do_group_exit
+               do_exit
+               exit_mm
+               mmput
+               __mmput
+               exit_mmap
+               free_pgtables
+               free_pgd_range
+               free_pud_range
+
+    10.94%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_group_exit
+            |
+            ---do_group_exit
+               do_exit
+               exit_mm
+               mmput
+               __mmput
+               exit_mmap
+               free_pgtables
+               free_pgd_range
+               free_pud_range
+
+    10.94%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_exit
+            |
+            ---do_exit
+               exit_mm
+               mmput
+               __mmput
+               exit_mmap
+               free_pgtables
+               free_pgd_range
+               free_pud_range
+
+    10.94%     0.00%  single_algo_4  [kernel.kallsyms]      [k] exit_mm
+            |
+            ---exit_mm
+               mmput
+               __mmput
+               exit_mmap
+               free_pgtables
+               free_pgd_range
+               free_pud_range
+
+    10.94%     0.00%  single_algo_4  [kernel.kallsyms]      [k] mmput
+            |
+            ---mmput
+               __mmput
+               exit_mmap
+               free_pgtables
+               free_pgd_range
+               free_pud_range
+
+    10.94%     0.00%  single_algo_4  [kernel.kallsyms]      [k] __mmput
+            |
+            ---__mmput
+               exit_mmap
+               free_pgtables
+               free_pgd_range
+               free_pud_range
+
+    10.94%     0.00%  single_algo_4  [kernel.kallsyms]      [k] exit_mmap
+            |
+            ---exit_mmap
+               free_pgtables
+               free_pgd_range
+               free_pud_range
+
+    10.94%     0.00%  single_algo_4  [kernel.kallsyms]      [k] free_pgtables
+            |
+            ---free_pgtables
+               free_pgd_range
+               free_pud_range
+
+    10.94%     0.00%  single_algo_4  [kernel.kallsyms]      [k] free_pgd_range
+            |
+            ---free_pgd_range
+               free_pud_range
+
+     9.33%     9.33%  single_algo_4  [kernel.kallsyms]      [k] percpu_counter_add_batch
+            |          
+            |--8.39%--_start
+            |          __libc_start_main
+            |          0xf00c7f4684c4
+            |          main
+            |          MatrixOperations::MatrixOperations(int)
+            |          std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::vector<double, std::allocator<double> >*, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > >, unsigned long, std::vector<double, std::allocator<double> > const&)
+            |          std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+            |          operator new(unsigned long)
+            |          malloc
+            |          0xf00c7f4d5a98
+            |          el0t_64_sync
+            |          el0t_64_sync_handler
+            |          el0_da
+            |          do_mem_abort
+            |          do_translation_fault
+            |          do_page_fault
+            |          handle_mm_fault
+            |          __handle_mm_fault
+            |          handle_pte_fault
+            |          do_pte_missing
+            |          do_anonymous_page
+            |          percpu_counter_add_batch
+            |          
+             --0.95%--0xf00c7f998a40
+                       el0t_64_sync
+                       el0t_64_sync_handler
+                       el0_ia
+                       do_mem_abort
+                       do_translation_fault
+                       do_page_fault
+                       handle_mm_fault
+                       __handle_mm_fault
+                       handle_pte_fault
+                       do_pte_missing
+                       do_read_fault
+                       filemap_map_pages
+                       set_pte_range
+                       percpu_counter_add_batch
+
+     7.60%     0.00%  single_algo_4  libc.so.6              [.] 0x0000f00c7f4e1d78
+            |
+            ---0xf00c7f4e1d78
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_da
+               do_mem_abort
+               do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               do_anonymous_page
+               alloc_anon_folio
+
+     5.91%     5.91%  single_algo_4  [kernel.kallsyms]      [k] percpu_ref_put_many.constprop.0
+            |
+            ---_start
+               __libc_start_main
+               0xf00c7f4684c4
+               main
+               MatrixOperations::MatrixOperations(int)
+               std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > >::_M_fill_insert(__gnu_cxx::__normal_iterator<std::vector<double, std::allocator<double> >*, std::vector<std::vector<double, std::allocator<double> >, std::allocator<std::vector<double, std::allocator<double> > > > >, unsigned long, std::vector<double, std::allocator<double> > const&)
+               std::vector<double, std::allocator<double> >* std::__do_uninit_fill_n<std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > >(std::vector<double, std::allocator<double> >*, unsigned long, std::vector<double, std::allocator<double> > const&)
+               0xf00c7f4e1d70
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_da
+               do_mem_abort
+               do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               do_anonymous_page
+               __mem_cgroup_charge
+               percpu_ref_put_many.constprop.0
+
+     5.91%     0.00%  single_algo_4  libc.so.6              [.] 0x0000f00c7f4e1d70
+            |
+            ---0xf00c7f4e1d70
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_da
+               do_mem_abort
+               do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               do_anonymous_page
+               __mem_cgroup_charge
+               percpu_ref_put_many.constprop.0
+
+     5.91%     5.91%  single_algo_4  libstdc++.so.6.0.33    [.] std::__cxx11::moneypunct<char, false>::_M_initialize_moneypunct(__locale_struct*, char const*)
+            |
+            ---0xf00c7f998a78
+               0xf00c7f982c24
+               0xf00c7f982b14
+               0xf00c7f6a5a60
+               std::ios_base_library_init()
+               std::locale::locale()
+               0xf00c7f6de284
+               std::locale::_Impl::_Impl(unsigned long)
+               std::locale::_Impl::_Impl(unsigned long)
+               std::__cxx11::moneypunct<char, false>::_M_initialize_moneypunct(__locale_struct*, char const*)
+
+     5.91%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f998a78
+            |
+            ---0xf00c7f998a78
+               0xf00c7f982c24
+               0xf00c7f982b14
+               0xf00c7f6a5a60
+               std::ios_base_library_init()
+               std::locale::locale()
+               0xf00c7f6de284
+               std::locale::_Impl::_Impl(unsigned long)
+               std::locale::_Impl::_Impl(unsigned long)
+               std::__cxx11::moneypunct<char, false>::_M_initialize_moneypunct(__locale_struct*, char const*)
+
+     5.91%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f982c24
+            |
+            ---0xf00c7f982c24
+               0xf00c7f982b14
+               0xf00c7f6a5a60
+               std::ios_base_library_init()
+               std::locale::locale()
+               0xf00c7f6de284
+               std::locale::_Impl::_Impl(unsigned long)
+               std::locale::_Impl::_Impl(unsigned long)
+               std::__cxx11::moneypunct<char, false>::_M_initialize_moneypunct(__locale_struct*, char const*)
+
+     5.91%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f982b14
+            |
+            ---0xf00c7f982b14
+               0xf00c7f6a5a60
+               std::ios_base_library_init()
+               std::locale::locale()
+               0xf00c7f6de284
+               std::locale::_Impl::_Impl(unsigned long)
+               std::locale::_Impl::_Impl(unsigned long)
+               std::__cxx11::moneypunct<char, false>::_M_initialize_moneypunct(__locale_struct*, char const*)
+
+     5.91%     0.00%  single_algo_4  libstdc++.so.6.0.33    [.] 0x0000f00c7f6a5a60
+            |
+            ---0xf00c7f6a5a60
+               std::ios_base_library_init()
+               std::locale::locale()
+               0xf00c7f6de284
+               std::locale::_Impl::_Impl(unsigned long)
+               std::locale::_Impl::_Impl(unsigned long)
+               std::__cxx11::moneypunct<char, false>::_M_initialize_moneypunct(__locale_struct*, char const*)
+
+     5.91%     0.00%  single_algo_4  libstdc++.so.6.0.33    [.] std::ios_base_library_init()
+            |
+            ---std::ios_base_library_init()
+               std::locale::locale()
+               0xf00c7f6de284
+               std::locale::_Impl::_Impl(unsigned long)
+               std::locale::_Impl::_Impl(unsigned long)
+               std::__cxx11::moneypunct<char, false>::_M_initialize_moneypunct(__locale_struct*, char const*)
+
+     5.91%     0.00%  single_algo_4  libstdc++.so.6.0.33    [.] std::locale::locale()
+            |
+            ---std::locale::locale()
+               0xf00c7f6de284
+               std::locale::_Impl::_Impl(unsigned long)
+               std::locale::_Impl::_Impl(unsigned long)
+               std::__cxx11::moneypunct<char, false>::_M_initialize_moneypunct(__locale_struct*, char const*)
+
+     5.91%     0.00%  single_algo_4  libstdc++.so.6.0.33    [.] 0x0000f00c7f6de284
+            |
+            ---0xf00c7f6de284
+               std::locale::_Impl::_Impl(unsigned long)
+               std::locale::_Impl::_Impl(unsigned long)
+               std::__cxx11::moneypunct<char, false>::_M_initialize_moneypunct(__locale_struct*, char const*)
+
+     5.91%     0.00%  single_algo_4  libstdc++.so.6.0.33    [.] std::locale::_Impl::_Impl(unsigned long)
+            |
+            ---std::locale::_Impl::_Impl(unsigned long)
+               std::locale::_Impl::_Impl(unsigned long)
+               std::__cxx11::moneypunct<char, false>::_M_initialize_moneypunct(__locale_struct*, char const*)
+
+     5.91%     0.00%  single_algo_4  [kernel.kallsyms]      [k] __mem_cgroup_charge
+            |
+            ---__mem_cgroup_charge
+               percpu_ref_put_many.constprop.0
+
+     3.03%     3.03%  single_algo_4  [kernel.kallsyms]      [k] vma_interval_tree_insert
+            |
+            ---0xf00c7f998a54
+               0xf00c7f994b94
+               0xf00c7f993730
+               0xf00c7f996154
+               0xf00c7f980af4
+               _dl_catch_exception
+               0xf00c7f98059c
+               0xf00c7f985e30
+               0xf00c7f984c37
+               0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f998a54
+            |
+            ---0xf00c7f998a54
+               0xf00c7f994b94
+               0xf00c7f993730
+               0xf00c7f996154
+               0xf00c7f980af4
+               _dl_catch_exception
+               0xf00c7f98059c
+               0xf00c7f985e30
+               0xf00c7f984c37
+               0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f994b94
+            |
+            ---0xf00c7f994b94
+               0xf00c7f993730
+               0xf00c7f996154
+               0xf00c7f980af4
+               _dl_catch_exception
+               0xf00c7f98059c
+               0xf00c7f985e30
+               0xf00c7f984c37
+               0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f993730
+            |
+            ---0xf00c7f993730
+               0xf00c7f996154
+               0xf00c7f980af4
+               _dl_catch_exception
+               0xf00c7f98059c
+               0xf00c7f985e30
+               0xf00c7f984c37
+               0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f996154
+            |
+            ---0xf00c7f996154
+               0xf00c7f980af4
+               _dl_catch_exception
+               0xf00c7f98059c
+               0xf00c7f985e30
+               0xf00c7f984c37
+               0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f980af4
+            |
+            ---0xf00c7f980af4
+               _dl_catch_exception
+               0xf00c7f98059c
+               0xf00c7f985e30
+               0xf00c7f984c37
+               0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] _dl_catch_exception
+            |
+            ---_dl_catch_exception
+               0xf00c7f98059c
+               0xf00c7f985e30
+               0xf00c7f984c37
+               0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f98059c
+            |
+            ---0xf00c7f98059c
+               0xf00c7f985e30
+               0xf00c7f984c37
+               0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f985e30
+            |
+            ---0xf00c7f985e30
+               0xf00c7f984c37
+               0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f984c37
+            |
+            ---0xf00c7f984c37
+               0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f99958c
+            |
+            ---0xf00c7f99958c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  [kernel.kallsyms]      [k] __arm64_sys_mprotect
+            |
+            ---__arm64_sys_mprotect
+               do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_mprotect_pkey.constprop.0
+            |
+            ---do_mprotect_pkey.constprop.0
+               mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  [kernel.kallsyms]      [k] mprotect_fixup
+            |
+            ---mprotect_fixup
+               vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  [kernel.kallsyms]      [k] vma_modify
+            |
+            ---vma_modify
+               __split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  [kernel.kallsyms]      [k] __split_vma
+            |
+            ---__split_vma
+               vma_prepare
+               vma_interval_tree_insert
+
+     3.03%     0.00%  single_algo_4  [kernel.kallsyms]      [k] vma_prepare
+            |
+            ---vma_prepare
+               vma_interval_tree_insert
+
+     1.04%     0.00%  single_algo_4  [unknown]              [k] 0x0000f90f5bafde0c
+            |
+            ---0xf90f5bafde0c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_execve
+               do_execveat_common.isra.0
+               bprm_execve
+               bprm_execve.part.0
+               exec_binprm
+               search_binary_handler
+               load_elf_binary
+               |          
+               |--0.52%--load_elf_interp
+               |          elf_load
+               |          vm_mmap
+               |          vm_mmap_pgoff
+               |          do_mmap
+               |          mmap_region
+               |          vm_area_alloc
+               |          kmem_cache_alloc
+               |          arch_local_irq_restore
+               |          
+                --0.52%--setup_arg_pages
+                          expand_stack_locked
+                          expand_downwards
+                          perf_event_mmap
+                          perf_event_mmap_event
+
+     1.04%     0.00%  single_algo_4  [kernel.kallsyms]      [k] __arm64_sys_execve
+            |
+            ---__arm64_sys_execve
+               do_execveat_common.isra.0
+               bprm_execve
+               bprm_execve.part.0
+               exec_binprm
+               search_binary_handler
+               load_elf_binary
+               |          
+               |--0.52%--load_elf_interp
+               |          elf_load
+               |          vm_mmap
+               |          vm_mmap_pgoff
+               |          do_mmap
+               |          mmap_region
+               |          vm_area_alloc
+               |          kmem_cache_alloc
+               |          arch_local_irq_restore
+               |          
+                --0.52%--setup_arg_pages
+                          expand_stack_locked
+                          expand_downwards
+                          perf_event_mmap
+                          perf_event_mmap_event
+
+     1.04%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_execveat_common.isra.0
+            |
+            ---do_execveat_common.isra.0
+               bprm_execve
+               bprm_execve.part.0
+               exec_binprm
+               search_binary_handler
+               load_elf_binary
+               |          
+               |--0.52%--load_elf_interp
+               |          elf_load
+               |          vm_mmap
+               |          vm_mmap_pgoff
+               |          do_mmap
+               |          mmap_region
+               |          vm_area_alloc
+               |          kmem_cache_alloc
+               |          arch_local_irq_restore
+               |          
+                --0.52%--setup_arg_pages
+                          expand_stack_locked
+                          expand_downwards
+                          perf_event_mmap
+                          perf_event_mmap_event
+
+     1.04%     0.00%  single_algo_4  [kernel.kallsyms]      [k] bprm_execve
+            |
+            ---bprm_execve
+               bprm_execve.part.0
+               exec_binprm
+               search_binary_handler
+               load_elf_binary
+               |          
+               |--0.52%--load_elf_interp
+               |          elf_load
+               |          vm_mmap
+               |          vm_mmap_pgoff
+               |          do_mmap
+               |          mmap_region
+               |          vm_area_alloc
+               |          kmem_cache_alloc
+               |          arch_local_irq_restore
+               |          
+                --0.52%--setup_arg_pages
+                          expand_stack_locked
+                          expand_downwards
+                          perf_event_mmap
+                          perf_event_mmap_event
+
+     1.04%     0.00%  single_algo_4  [kernel.kallsyms]      [k] bprm_execve.part.0
+            |
+            ---bprm_execve.part.0
+               exec_binprm
+               search_binary_handler
+               load_elf_binary
+               |          
+               |--0.52%--load_elf_interp
+               |          elf_load
+               |          vm_mmap
+               |          vm_mmap_pgoff
+               |          do_mmap
+               |          mmap_region
+               |          vm_area_alloc
+               |          kmem_cache_alloc
+               |          arch_local_irq_restore
+               |          
+                --0.52%--setup_arg_pages
+                          expand_stack_locked
+                          expand_downwards
+                          perf_event_mmap
+                          perf_event_mmap_event
+
+     1.04%     0.00%  single_algo_4  [kernel.kallsyms]      [k] exec_binprm
+            |
+            ---exec_binprm
+               search_binary_handler
+               load_elf_binary
+               |          
+               |--0.52%--load_elf_interp
+               |          elf_load
+               |          vm_mmap
+               |          vm_mmap_pgoff
+               |          do_mmap
+               |          mmap_region
+               |          vm_area_alloc
+               |          kmem_cache_alloc
+               |          arch_local_irq_restore
+               |          
+                --0.52%--setup_arg_pages
+                          expand_stack_locked
+                          expand_downwards
+                          perf_event_mmap
+                          perf_event_mmap_event
+
+     1.04%     0.00%  single_algo_4  [kernel.kallsyms]      [k] search_binary_handler
+            |
+            ---search_binary_handler
+               load_elf_binary
+               |          
+               |--0.52%--load_elf_interp
+               |          elf_load
+               |          vm_mmap
+               |          vm_mmap_pgoff
+               |          do_mmap
+               |          mmap_region
+               |          vm_area_alloc
+               |          kmem_cache_alloc
+               |          arch_local_irq_restore
+               |          
+                --0.52%--setup_arg_pages
+                          expand_stack_locked
+                          expand_downwards
+                          perf_event_mmap
+                          perf_event_mmap_event
+
+     1.04%     0.00%  single_algo_4  [kernel.kallsyms]      [k] load_elf_binary
+            |
+            ---load_elf_binary
+               |          
+               |--0.52%--load_elf_interp
+               |          elf_load
+               |          vm_mmap
+               |          vm_mmap_pgoff
+               |          do_mmap
+               |          mmap_region
+               |          vm_area_alloc
+               |          kmem_cache_alloc
+               |          arch_local_irq_restore
+               |          
+                --0.52%--setup_arg_pages
+                          expand_stack_locked
+                          expand_downwards
+                          perf_event_mmap
+                          perf_event_mmap_event
+
+     0.95%     0.00%  single_algo_4  ld-linux-aarch64.so.1  [.] 0x0000f00c7f998a40
+            |
+            ---0xf00c7f998a40
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_ia
+               do_mem_abort
+               do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               do_read_fault
+               filemap_map_pages
+               set_pte_range
+               percpu_counter_add_batch
+
+     0.95%     0.00%  single_algo_4  [kernel.kallsyms]      [k] el0_ia
+            |
+            ---el0_ia
+               do_mem_abort
+               do_translation_fault
+               do_page_fault
+               handle_mm_fault
+               __handle_mm_fault
+               handle_pte_fault
+               do_pte_missing
+               do_read_fault
+               filemap_map_pages
+               set_pte_range
+               percpu_counter_add_batch
+
+     0.95%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_read_fault
+            |
+            ---do_read_fault
+               filemap_map_pages
+               set_pte_range
+               percpu_counter_add_batch
+
+     0.95%     0.00%  single_algo_4  [kernel.kallsyms]      [k] filemap_map_pages
+            |
+            ---filemap_map_pages
+               set_pte_range
+               percpu_counter_add_batch
+
+     0.95%     0.00%  single_algo_4  [kernel.kallsyms]      [k] set_pte_range
+            |
+            ---set_pte_range
+               percpu_counter_add_batch
+
+     0.52%     0.52%  single_algo_4  [kernel.kallsyms]      [k] arch_local_irq_restore
+            |
+            ---0xf90f5bafe057
+               0xf90f5bafde0c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_execve
+               do_execveat_common.isra.0
+               bprm_execve
+               bprm_execve.part.0
+               exec_binprm
+               search_binary_handler
+               load_elf_binary
+               load_elf_interp
+               elf_load
+               vm_mmap
+               vm_mmap_pgoff
+               do_mmap
+               mmap_region
+               vm_area_alloc
+               kmem_cache_alloc
+               arch_local_irq_restore
+
+     0.52%     0.00%  single_algo_4  [unknown]              [k] 0x0000f90f5bafe057
+            |
+            ---0xf90f5bafe057
+               0xf90f5bafde0c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_execve
+               do_execveat_common.isra.0
+               bprm_execve
+               bprm_execve.part.0
+               exec_binprm
+               search_binary_handler
+               load_elf_binary
+               load_elf_interp
+               elf_load
+               vm_mmap
+               vm_mmap_pgoff
+               do_mmap
+               mmap_region
+               vm_area_alloc
+               kmem_cache_alloc
+               arch_local_irq_restore
+
+     0.52%     0.52%  single_algo_4  [kernel.kallsyms]      [k] perf_event_mmap_event
+            |
+            ---0xf90f5bafde0c
+               el0t_64_sync
+               el0t_64_sync_handler
+               el0_svc
+               do_el0_svc
+               el0_svc_common.constprop.0
+               invoke_syscall
+               __arm64_sys_execve
+               do_execveat_common.isra.0
+               bprm_execve
+               bprm_execve.part.0
+               exec_binprm
+               search_binary_handler
+               load_elf_binary
+               setup_arg_pages
+               expand_stack_locked
+               expand_downwards
+               perf_event_mmap
+               perf_event_mmap_event
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] load_elf_interp
+            |
+            ---load_elf_interp
+               elf_load
+               vm_mmap
+               vm_mmap_pgoff
+               do_mmap
+               mmap_region
+               vm_area_alloc
+               kmem_cache_alloc
+               arch_local_irq_restore
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] elf_load
+            |
+            ---elf_load
+               vm_mmap
+               vm_mmap_pgoff
+               do_mmap
+               mmap_region
+               vm_area_alloc
+               kmem_cache_alloc
+               arch_local_irq_restore
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] vm_mmap
+            |
+            ---vm_mmap
+               vm_mmap_pgoff
+               do_mmap
+               mmap_region
+               vm_area_alloc
+               kmem_cache_alloc
+               arch_local_irq_restore
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] vm_mmap_pgoff
+            |
+            ---vm_mmap_pgoff
+               do_mmap
+               mmap_region
+               vm_area_alloc
+               kmem_cache_alloc
+               arch_local_irq_restore
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] do_mmap
+            |
+            ---do_mmap
+               mmap_region
+               vm_area_alloc
+               kmem_cache_alloc
+               arch_local_irq_restore
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] setup_arg_pages
+            |
+            ---setup_arg_pages
+               expand_stack_locked
+               expand_downwards
+               perf_event_mmap
+               perf_event_mmap_event
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] expand_stack_locked
+            |
+            ---expand_stack_locked
+               expand_downwards
+               perf_event_mmap
+               perf_event_mmap_event
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] mmap_region
+            |
+            ---mmap_region
+               vm_area_alloc
+               kmem_cache_alloc
+               arch_local_irq_restore
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] expand_downwards
+            |
+            ---expand_downwards
+               perf_event_mmap
+               perf_event_mmap_event
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] vm_area_alloc
+            |
+            ---vm_area_alloc
+               kmem_cache_alloc
+               arch_local_irq_restore
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] kmem_cache_alloc
+            |
+            ---kmem_cache_alloc
+               arch_local_irq_restore
+
+     0.52%     0.00%  single_algo_4  [kernel.kallsyms]      [k] perf_event_mmap
+            |
+            ---perf_event_mmap
+               perf_event_mmap_event
+
+     0.01%     0.00%  perf-exec      [unknown]              [k] 0x0000f90f5bafde0c
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] el0t_64_sync
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] el0t_64_sync_handler
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] el0_svc
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] do_el0_svc
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] el0_svc_common.constprop.0
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] invoke_syscall
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] __arm64_sys_execve
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] do_execveat_common.isra.0
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] bprm_execve
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] bprm_execve.part.0
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] exec_binprm
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] search_binary_handler
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] load_elf_binary
+     0.01%     0.00%  perf-exec      [kernel.kallsyms]      [k] begin_new_exec
+     0.01%     0.01%  perf-exec      [kernel.kallsyms]      [k] perf_event_addr_filters_exec
+     0.00%     0.00%  perf-exec      [kernel.kallsyms]      [k] perf_event_enable_on_exec
+     0.00%     0.00%  perf-exec      [kernel.kallsyms]      [k] perf_event_exec
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

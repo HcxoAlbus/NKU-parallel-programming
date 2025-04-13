@@ -1,0 +1,2 @@
+# NKU-parallel-programming
+本仓库用于存放2025年春NKU并行程序设计课程的作业代码等内容

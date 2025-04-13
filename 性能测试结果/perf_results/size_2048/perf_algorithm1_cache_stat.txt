@@ -1,0 +1,20 @@
+# started on Sun Mar 23 23:33:32 2025
+
+
+ Performance counter stats for './single_algo_1 2048':
+
+       222,092,738      cycles                                                                  (87.89%)
+       206,769,320      instructions                     #    0.93  insn per cycle              (87.62%)
+        75,764,331      L1-dcache-loads                                                         (86.88%)
+        15,075,551      L1-dcache-load-misses            #   19.90% of all L1-dcache accesses   (87.90%)
+                 0      LLC-loads                                                               (85.81%)
+         2,756,602      LLC-load-misses                                                         (88.25%)
+        79,178,685      dTLB-loads                                                              (87.47%)
+        13,691,711      dTLB-load-misses                 #   17.29% of all dTLB cache accesses  (76.05%)
+
+       0.113643968 seconds time elapsed
+
+       0.088189000 seconds user
+       0.016475000 seconds sys
+
+
