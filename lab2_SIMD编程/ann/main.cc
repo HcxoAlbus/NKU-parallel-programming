@@ -11,6 +11,10 @@
 #include <omp.h>
 #include "hnswlib/hnswlib/hnswlib.h"
 #include "flat_scan.h"
+#include "simd_anns.h"
+#include "pq_anns.h"
+#include "sq_anns.h"
+#include "fastscan_pq_anns.h"
 // 可以自行添加需要的头文件
 
 using namespace hnswlib;
@@ -70,8 +74,73 @@ void build_index(float* base, size_t base_number, size_t vecdim)
     char path_index[1024] = "files/hnsw.index";
     appr_alg->saveIndex(path_index);
 }
+// 封装查询过程的函数模板
+template<typename SearchFunc>
+std::vector<SearchResult> benchmark_search(
+    SearchFunc search_func,
+    float* base,
+    float* test_query,
+    int* test_gt,
+    size_t base_number, 
+    size_t vecdim,
+    size_t test_number,
+    size_t test_gt_d,
+    size_t k
+) {
+    std::vector<SearchResult> results(test_number);
+    
+    // 查询测试代码，遍历查询向量
+    for(int i = 0; i < test_number; ++i) {
+        // 秒与微秒的转换常量
+        const unsigned long Converter = 1000 * 1000;
+        struct timeval val;
+        gettimeofday(&val, NULL);
 
+        // 调用传入的搜索函数
+        auto res = search_func(base, test_query + i*vecdim, base_number, vecdim, k);
 
+        // 计算延迟
+        struct timeval newVal;
+        gettimeofday(&newVal, NULL);
+        int64_t diff = (newVal.tv_sec * Converter + newVal.tv_usec) - (val.tv_sec * Converter + val.tv_usec);
+
+        // 构建 ground truth 的集合
+        std::set<uint32_t> gtset;
+        for(int j = 0; j < k; ++j){
+            int t = test_gt[j + i*test_gt_d];
+            gtset.insert(t);
+        }
+
+        // 计算召回率
+        size_t acc = 0;
+        while (res.size()) {   
+            int x = res.top().second;
+            if(gtset.find(x) != gtset.end()){
+                ++acc;
+            }
+            res.pop();
+        }
+        float recall = (float)acc/k;
+        
+        // 保存结果
+        results[i] = {recall, diff};
+    }
+    
+    return results;
+}
+// 打印测试结果的辅助函数
+void print_results(const std::string& method_name, const std::vector<SearchResult>& results, size_t test_number) {
+    float avg_recall = 0, avg_latency = 0;
+    for(int i = 0; i < test_number; ++i) {
+        avg_recall += results[i].recall;
+        avg_latency += results[i].latency;
+    }
+    
+    std::cout << "=== " << method_name << " ===" << std::endl;
+    std::cout << "Average recall: " << avg_recall / test_number << std::endl;
+    std::cout << "Average latency (us): " << avg_latency / test_number << std::endl;
+    std::cout << std::endl;
+}
 int main(int argc, char *argv[])
 {
     // 查询向量的数量和向量的总数
@@ -87,9 +156,36 @@ int main(int argc, char *argv[])
     test_number = 2000;
     // 查询时返回的最邻近向量的数量
     const size_t k = 10;
-    // 存储每次查询的召回率和延迟
-    std::vector<SearchResult> results;
-    results.resize(test_number);
+     // 测试不同的查询方法并保存结果
+    
+    // 1. 测试 flat_search
+    std::vector<SearchResult> results_flat = benchmark_search(
+        flat_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    
+    // 2. 测试 simd_search
+    std::vector<SearchResult> results_simd = benchmark_search(
+        simd_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    
+    // 3. 测试 pq_search
+    std::vector<SearchResult> results_pq = benchmark_search(
+        pq_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    
+    // 4. 测试 sq_search
+    std::vector<SearchResult> results_sq = benchmark_search(
+        sq_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    
+    // 5. 测试 fast_pq_search
+    std::vector<SearchResult> results_fast_pq = benchmark_search(
+        fast_pq_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    
+    // 打印每种方法的测试结果
+    print_results("Flat Search", results_flat, test_number);
+    print_results("SIMD Search", results_simd, test_number);
+    print_results("PQ Search", results_pq, test_number);
+    print_results("SQ Search", results_sq, test_number);
+    print_results("Fast PQ Search", results_fast_pq, test_number);
+    
+    return 0;
 
     // 如果你需要保存索引，可以在这里添加你需要的函数，你可以将下面的注释删除来查看pbs是否将build.index返回到你的files目录中
     // 要保存的目录必须是files/*
@@ -99,59 +195,4 @@ int main(int argc, char *argv[])
     // build_index(base, base_number, vecdim);
 
     
-    // 查询测试代码，遍历查询向量
-    // 对每个查询向量执行搜索，并计算召回率和延迟。
-    for(int i = 0; i < test_number; ++i) {
-        // 秒与微秒的转换常量
-        // 1秒 = 1000毫秒 = 1000 * 1000微秒
-        const unsigned long Converter = 1000 * 1000;
-        //是一个结构体，存储秒和微秒。
-        //gettimeofday 获取当前时间
-        struct timeval val;
-        int ret = gettimeofday(&val, NULL);
-
-        // 该文件已有代码中你只能修改该函数的调用方式
-        // 可以任意修改函数名，函数参数或者改为调用成员函数，但是不能修改函数返回值。
-        // 对第 i 个查询向量执行搜索，返回一个优先队列 res，存储最近邻的结果。
-
-        auto res = flat_search(base, test_query + i*vecdim, base_number, vecdim, k);
-
-        // 通过获取当前时间的秒和微秒来计算延迟
-        struct timeval newVal;
-        ret = gettimeofday(&newVal, NULL);
-        int64_t diff = (newVal.tv_sec * Converter + newVal.tv_usec) - (val.tv_sec * Converter + val.tv_usec);
-
-        // 构建 ground truth 的集合，用于后续计算召回率。
-        std::set<uint32_t> gtset;
-        for(int j = 0; j < k; ++j){
-            int t = test_gt[j + i*test_gt_d];
-            gtset.insert(t);
-        }
-
-        // 遍历搜索结果 res，检查是否在 ground truth 集合中。
-        // 计算召回率 recall。
-        size_t acc = 0;
-        while (res.size()) {   
-            int x = res.top().second;
-            if(gtset.find(x) != gtset.end()){
-                ++acc;
-            }
-            res.pop();
-        }
-        float recall = (float)acc/k;
-
-        // 将召回率和延迟存储到 results 容器中。
-        results[i] = {recall, diff};
-    }
-    // 计算平均召回率和平均延迟
-    float avg_recall = 0, avg_latency = 0;
-    for(int i = 0; i < test_number; ++i) {
-        avg_recall += results[i].recall;
-        avg_latency += results[i].latency;
-    }
-
-    // 浮点误差可能导致一些精确算法平均recall不是1
-    std::cout << "average recall: "<<avg_recall / test_number<<"\n";
-    std::cout << "average latency (us): "<<avg_latency / test_number<<"\n";
-    return 0;
 }

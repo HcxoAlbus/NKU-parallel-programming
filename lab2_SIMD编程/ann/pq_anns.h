@@ -178,14 +178,14 @@ public:
     std::priority_queue<std::pair<float, uint32_t>> search(
         float* query, size_t nbase, size_t k) {
         
-        // 为查询计算距离表
+        // 为查询计算距离表，存储查询向量与每个子空间中所有码点的距离
         std::vector<std::vector<float>> distance_tables(nsub, std::vector<float>(ksub));
-        
+        // 遍历每个子空间
         for (size_t sub = 0; sub < nsub; ++sub) {
             size_t d_start = sub * dsub;
             size_t d_end = std::min(d_start + dsub, vecdim);
             size_t d_sub_actual = d_end - d_start;
-            
+            // 遍历每个码点，计算查询向量与码点之间的距离并存储
             for (size_t centroid = 0; centroid < ksub; ++centroid) {
                 float ip = 0;
                 for (size_t j = 0; j < d_sub_actual; ++j) {
@@ -200,7 +200,7 @@ public:
         
         for (size_t i = 0; i < nbase; ++i) {
             float dist = 0;
-            
+            // 累加每个子空间，计算查询向量与每个子空间中所有码点的距离
             for (size_t sub = 0; sub < nsub; ++sub) {
                 dist += distance_tables[sub][codes[i][sub]];
             }
