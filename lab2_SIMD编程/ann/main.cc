@@ -14,7 +14,8 @@
 #include "simd_anns.h"
 #include "pq_anns.h"
 #include "sq_anns.h"
-#include "fastscan_pq_anns.h"
+#include <functional>
+// #include "fastscan_pq_anns.h"
 // 可以自行添加需要的头文件
 
 using namespace hnswlib;
@@ -128,6 +129,7 @@ std::vector<SearchResult> benchmark_search(
     
     return results;
 }
+
 // 打印测试结果的辅助函数
 void print_results(const std::string& method_name, const std::vector<SearchResult>& results, size_t test_number) {
     float avg_recall = 0, avg_latency = 0;
@@ -148,42 +150,56 @@ int main(int argc, char *argv[])
     // ground truth的维度和查询向量的维度
     size_t test_gt_d = 0, vecdim = 0;
 
-    std::string data_path = "/anndata/"; 
-    auto test_query = LoadData<float>(data_path + "DEEP100K.query.fbin", test_number, vecdim);
-    auto test_gt = LoadData<int>(data_path + "DEEP100K.gt.query.100k.top100.bin", test_number, test_gt_d);
-    auto base = LoadData<float>(data_path + "DEEP100K.base.100k.fbin", base_number, vecdim);
+    std::string data_path = "/data"; 
+    auto test_query = LoadData<float>("DEEP100K.query.fbin", test_number, vecdim);
+    auto test_gt = LoadData<int>("DEEP100K.gt.query.100k.top100.bin", test_number, test_gt_d);
+    auto base = LoadData<float>("DEEP100K.base.100k.fbin", base_number, vecdim);
     // 只测试前2000条查询，避免测试时间过长
     test_number = 2000;
     // 查询时返回的最邻近向量的数量
     const size_t k = 10;
-     // 测试不同的查询方法并保存结果
+    // 测试不同的查询方法并保存结果
     
     // 1. 测试 flat_search
-    std::vector<SearchResult> results_flat = benchmark_search(
-        flat_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    //std::vector<SearchResult> results_flat = benchmark_search(
+      //  flat_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
     
     // 2. 测试 simd_search
-    std::vector<SearchResult> results_simd = benchmark_search(
-        simd_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    //std::vector<SearchResult> results_simd = benchmark_search(
+      //  simd_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
     
-    // 3. 测试 pq_search
-    std::vector<SearchResult> results_pq = benchmark_search(
-        pq_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    // // 3. 测试 pq_search
+     //std::vector<SearchResult> results_pq = benchmark_search(
+       //  pq_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
     
     // 4. 测试 sq_search
+    // Instantiate the ScalarQuantizer ONCE before benchmarking
+    ScalarQuantizer quantizer(base, base_number, vecdim); // Changed variable name for clarity
+
+    // Use std::bind to create an adapter for the member function.
+    // benchmark_search passes 5 arguments: base, query, base_number, vecdim, k
+    // We need to call quantizer.sq_search(query, k)
+    // std::placeholders::_2 corresponds to the 'query' argument
+    // std::placeholders::_5 corresponds to the 'k' argument
+    auto sq_search_bound = std::bind(&ScalarQuantizer::sq_search, 
+                                     &quantizer, // Pass the object instance
+                                     std::placeholders::_2, // Map query
+                                     std::placeholders::_5); // Map k
+
     std::vector<SearchResult> results_sq = benchmark_search(
-        sq_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+       sq_search_bound, // Pass the bound function object
+       base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
     
     // 5. 测试 fast_pq_search
-    std::vector<SearchResult> results_fast_pq = benchmark_search(
-        fast_pq_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    // std::vector<SearchResult> results_fast_pq = benchmark_search(
+    //     fastscan_pq_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
     
     // 打印每种方法的测试结果
-    print_results("Flat Search", results_flat, test_number);
-    print_results("SIMD Search", results_simd, test_number);
-    print_results("PQ Search", results_pq, test_number);
+    //print_results("Flat Search", results_flat, test_number);
+    //print_results("SIMD Search", results_simd, test_number);
+    // print_results("PQ Search", results_pq, test_number);
     print_results("SQ Search", results_sq, test_number);
-    print_results("Fast PQ Search", results_fast_pq, test_number);
+    // print_results("Fast PQ Search", results_fast_pq, test_number);
     
     return 0;
 
