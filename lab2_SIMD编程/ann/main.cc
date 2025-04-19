@@ -37,8 +37,8 @@ T *LoadData(std::string data_path, size_t& n, size_t& d)
     }
     fin.close();
 
-    std::cerr<<"load data "<<data_path<<"\n";
-    std::cerr<<"dimension: "<<d<<"  number:"<<n<<"  size_per_element:"<<sizeof(T)<<"\n";
+    std::cerr<<"加载数据 "<<data_path<<"\n";
+    std::cerr<<"维度: "<<d<<"  数量:"<<n<<"  单个元素大小:"<<sizeof(T)<<"\n";
 
     return data;
 }
@@ -47,7 +47,7 @@ struct SearchResult
 {
     float recall; // 召回率，表示搜索结果中正确的最近邻占比。
     // 召回率 = (查询结果中正确的个数) / k
-    int64_t latency; // 查询延迟，单位为us
+    int64_t latency; // 查询延迟，单位为微秒 (us)
 };
 
 void build_index(float* base, size_t base_number, size_t vecdim)
@@ -139,8 +139,8 @@ void print_results(const std::string& method_name, const std::vector<SearchResul
     }
     
     std::cout << "=== " << method_name << " ===" << std::endl;
-    std::cout << "Average recall: " << avg_recall / test_number << std::endl;
-    std::cout << "Average latency (us): " << avg_latency / test_number << std::endl;
+    std::cout << "平均召回率: " << avg_recall / test_number << std::endl;
+    std::cout << "平均延迟 (us): " << avg_latency / test_number << std::endl;
     std::cout << std::endl;
 }
 int main(int argc, char *argv[])
@@ -161,20 +161,35 @@ int main(int argc, char *argv[])
     // 测试不同的查询方法并保存结果
     
     // 1. 测试 flat_search
-    //std::vector<SearchResult> results_flat = benchmark_search(
-      //  flat_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    std::vector<SearchResult> results_flat = benchmark_search(
+        flat_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
     
     // 2. 测试 simd_search
-    //std::vector<SearchResult> results_simd = benchmark_search(
-      //  simd_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    std::vector<SearchResult> results_simd = benchmark_search(
+        simd_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
     
-    // // 3. 测试 pq_search
-     //std::vector<SearchResult> results_pq = benchmark_search(
-       //  pq_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
+    // 3. 测试 pq_search
+    // Instantiate ProductQuantizer ONCE before benchmarking
+    // You might want to adjust nsub_ (number of subspaces) and train_ratio
+    size_t nsub = 16; // Increased from 8 to 16 to 32，注意必须能被vecdim(96)整除
+    double train_ratio = 1.0; // Increased from 0.1 to 1.0 (use all data)
+
+    std::cerr << "使用 PQ 参数: nsub=" << nsub << ", train_ratio=" << train_ratio << std::endl;
+    ProductQuantizer pq_index(base, base_number, vecdim, nsub, train_ratio);
+
+    // Use std::bind for the member function ProductQuantizer::search
+    auto pq_search_bound = std::bind(&ProductQuantizer::search, 
+                                     &pq_index, // Pass the object instance
+                                     std::placeholders::_2, // Map query
+                                     std::placeholders::_5); // Map k
+
+    std::vector<SearchResult> results_pq = benchmark_search(
+       pq_search_bound, // Pass the bound function object
+       base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
     
     // 4. 测试 sq_search
     // Instantiate the ScalarQuantizer ONCE before benchmarking
-    ScalarQuantizer quantizer(base, base_number, vecdim); // Changed variable name for clarity
+    ScalarQuantizer sq_quantizer(base, base_number, vecdim); // Changed variable name for clarity
 
     // Use std::bind to create an adapter for the member function.
     // benchmark_search passes 5 arguments: base, query, base_number, vecdim, k
@@ -182,7 +197,7 @@ int main(int argc, char *argv[])
     // std::placeholders::_2 corresponds to the 'query' argument
     // std::placeholders::_5 corresponds to the 'k' argument
     auto sq_search_bound = std::bind(&ScalarQuantizer::sq_search, 
-                                     &quantizer, // Pass the object instance
+                                     &sq_quantizer, // Pass the object instance
                                      std::placeholders::_2, // Map query
                                      std::placeholders::_5); // Map k
 
@@ -195,12 +210,17 @@ int main(int argc, char *argv[])
     //     fastscan_pq_search, base, test_query, test_gt, base_number, vecdim, test_number, test_gt_d, k);
     
     // 打印每种方法的测试结果
-    //print_results("Flat Search", results_flat, test_number);
-    //print_results("SIMD Search", results_simd, test_number);
-    // print_results("PQ Search", results_pq, test_number);
-    print_results("SQ Search", results_sq, test_number);
+    print_results("Flat Search (暴力搜索)", results_flat, test_number);
+    print_results("SIMD Search (SIMD优化)", results_simd, test_number);
+    print_results("PQ Search (乘积量化)", results_pq, test_number);
+    print_results("SQ Search (标量量化)", results_sq, test_number);
     // print_results("Fast PQ Search", results_fast_pq, test_number);
     
+    // 释放加载的数据内存
+    delete[] test_query;
+    delete[] test_gt;
+    delete[] base;
+
     return 0;
 
     // 如果你需要保存索引，可以在这里添加你需要的函数，你可以将下面的注释删除来查看pbs是否将build.index返回到你的files目录中
