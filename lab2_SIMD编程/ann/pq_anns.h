@@ -9,13 +9,13 @@
 #include <cmath>    // 用于距离计算
 #include <cstdint>
 #include <arm_neon.h>
-#include <omp.h>      // For potential OpenMP usage
-#include <numeric>    // For std::iota
-#include <chrono>     // For timing output
-#include <iostream>   // For timing output
-#include <cstring>    // For std::memcpy
+#include <omp.h>      
+#include <numeric>    
+#include <chrono>     
+#include <iostream>   
+#include <cstring>   
 
-// 辅助函数：使用 NEON 计算 L2 平方距离 (保持不变)
+// 辅助函数：使用 NEON 计算 L2 平方距离
 inline float compute_l2_sq_neon(const float* a, const float* b, size_t dim) {
     float32x4_t sum_vec = vdupq_n_f32(0.0f);
     size_t d = 0;
@@ -148,7 +148,7 @@ private:
                     continue;
                 }
 
-                // **修复收敛检查: 先保存旧质心**
+                // 修复收敛检查: 先保存旧质心
                 std::copy(current_centroid, current_centroid + dsub, old_centroid_for_check.data());
 
                 // 计算并更新质心
@@ -167,14 +167,14 @@ private:
                     current_centroid[d] = new_val; // 直接更新
                 }
 
-                // **修复收敛检查: 比较更新后的质心和旧质心**
+                // 修复收敛检查: 比较更新后的质心和旧质心
                 for (size_t dim_idx = 0; dim_idx < dsub; ++dim_idx) {
                     if (std::abs(current_centroid[dim_idx] - old_centroid_for_check[dim_idx]) > 1e-6f) {
                         iteration_changed = true;
                         break; // 该质心已改变，无需继续比较
                     }
                 }
-            } // End loop for k (clusters)
+            } 
 
             // --- 空簇处理 ---
             if (n_empty_clusters > 0 && ntrain > ksub) { // 确保有足够的点来处理
@@ -240,7 +240,7 @@ private:
             if (!iteration_changed && iter > 0) { // 如果本轮迭代没有任何质心改变
                 converged = true;
             }
-        } // end k-means iterations
+        } 
     }
 
 
@@ -314,27 +314,15 @@ public:
           ksub(256),
           nbase(nbase_)
     {
-        // --- 参数验证 ---
-        if (base == nullptr) throw std::invalid_argument("Base data pointer cannot be null.");
-        if (vecdim_ == 0 || nbase_ == 0 || nsub_ == 0) throw std::invalid_argument("Vector dim, base number, and subspace number must be positive.");
-        if (vecdim_ % nsub_ != 0) throw std::invalid_argument("Vector dim must be divisible by the number of subspaces.");
-        if (ksub > 256) throw std::invalid_argument("ksub > 256 not supported with uint8_t codes.");
-        if (train_ratio <= 0.0 || train_ratio > 1.0) throw std::invalid_argument("Training ratio must be in (0.0, 1.0].");
-
 
         // --- 训练 ---
         size_t ntrain = static_cast<size_t>(static_cast<double>(nbase) * train_ratio);
         ntrain = std::max(static_cast<size_t>(ksub * 39), std::min(nbase, ntrain)); // FAISS 建议至少 ksub*39 个训练点
-        if (ntrain < ksub) {
-             std::cerr << "Warning: Number of training points (" << ntrain
-                       << ") is less than ksub (" << ksub
-                       << "). K-means might be unstable or results poor." << std::endl;
-        }
-         if (ntrain > nbase) ntrain = nbase; // Ensure ntrain doesn't exceed nbase
-
+        
+        if (ntrain > nbase) ntrain = nbase; // 不能超过基向量总数
 
         const float* train_data_ptr = base;
-        std::vector<float> train_subset; // RAII for potential subset
+        std::vector<float> train_subset; // 用于存储训练数据的子集
 
         if (ntrain < nbase) {
             std::cout << "PQ Training using a subset of " << ntrain << " vectors..." << std::endl;
@@ -380,9 +368,9 @@ public:
     // rerank_k: PQ 搜索阶段返回的候选数量 (p)，用于重排序。如果 rerank_k <= k 或 base_data == nullptr，则不进行重排序。
     std::priority_queue<std::pair<float, uint32_t>> search(
         const float* query,
-        const float* base_data, // Add base data pointer for reranking
+        const float* base_data, // 指向原始基向量数据的指针 (nbase * vecdim)，用于重排序
         size_t k,
-        size_t rerank_k = 0    // Add rerank parameter (p), default 0 means no reranking
+        size_t rerank_k = 0    // PQ 搜索阶段返回的候选数量 (p)，用于重排序
     ) const {
 
         // 最小堆用于存储最终结果 <距离平方, 索引>
@@ -402,7 +390,7 @@ public:
         // 使用 alignas 或 posix_memalign 可能有助于 NEON 性能，但标准 vector 也可以
         std::vector<float> distance_table(nsub * ksub);
 
-        // 可以考虑并行化距离表计算 (如果 nsub 很大)
+        // 并行化距离表计算 ( nsub 很大)
         // #pragma omp parallel for
         for (size_t sub = 0; sub < nsub; ++sub) {
             const float* query_sub_vec = query + sub * dsub;
@@ -435,7 +423,8 @@ public:
             }
         }
 
-        // --- 阶段 2: 重排序 (如果需要) ---
+        // --- 阶段 2: 重排序 ---
+        // 如果不需要重排序，直接返回 PQ 结果
         bool perform_reranking = (rerank_k > k && base_data != nullptr);
 
         if (!perform_reranking) {
@@ -493,7 +482,7 @@ public:
         }
     }
 
-    // 访问器 (保持不变)
+    // 访问器
     size_t get_vecdim() const { return vecdim; }
     size_t get_nsub() const { return nsub; }
     size_t get_dsub() const { return dsub; }

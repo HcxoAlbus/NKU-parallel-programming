@@ -4,8 +4,8 @@
 #include <cstdint>
 #include <vector>
 #include <algorithm>
-#include <limits> // for numeric_limits
-#include <numeric> // for std::inner_product, std::accumulate (optional, for verification)
+#include <limits> 
+#include <numeric>
 
 class ScalarQuantizer {
 private:
@@ -20,7 +20,7 @@ private:
     inline uint8_t quantize_value(float val, size_t dim) const {
         // 注意：需要确保 val 在量化范围内，调用者（quantize_query）负责处理
         float scaled_val = (val - min_vals[dim]) / scales[dim];
-        // Clamp to [0, 255] before casting
+        // 将值缩放到 [0, 255] 范围内 
         scaled_val = std::max(0.0f, std::min(255.0f, scaled_val));
         return static_cast<uint8_t>(scaled_val);
     }
@@ -50,13 +50,9 @@ private:
         }
 
         // 将累加器向量中的4个u32加起来得到最终和
-        uint32_t sum = vaddvq_u32(sum_vec); // NEON 水平加和 (更简洁)
-        // 如果 vaddvq_u32 不可用或性能不佳，可以使用原来的多步水平加和方法:
-        // uint64x2_t temp_sum = vpaddlq_u32(sum_vec);
-        // uint32_t sum = vgetq_lane_u64(temp_sum, 0) + vgetq_lane_u64(temp_sum, 1);
-
-
-        // 处理剩余的元素 (少于16个)
+        uint32_t sum = vaddvq_u32(sum_vec); // NEON 水平加和
+      
+        // 处理剩余的元素
         for (; d < vecdim; ++d) {
             sum += static_cast<uint32_t>(q_query[d]) * static_cast<uint32_t>(q_base[d]);
         }
@@ -69,10 +65,6 @@ public:
     ScalarQuantizer(const float* base, size_t base_number, size_t vecdim)
         : vecdim(vecdim), base_number(base_number) {
 
-        if (base_number == 0 || vecdim == 0) {
-            // 处理空输入的情况
-            return;
-        }
 
         scales.resize(vecdim);
         min_vals.resize(vecdim);
@@ -132,7 +124,6 @@ public:
     }
 
     // 计算查询向量 q_query 与基向量 base_idx 之间的量化空间 L2 距离平方
-    // D^2 = Σ(qQ[d] - qB[d])^2 = ΣqQ^2 + ΣqB^2 - 2 * Σ(qQ*qB)
     uint32_t compute_l2_sq_distance(const uint8_t* q_query, uint32_t q_query_norm_sq, size_t base_idx) const {
         uint32_t dot_product = quantized_dot_product(q_query, base_idx);
         uint32_t q_base_norm_sq = quantized_base_norms[base_idx];
@@ -140,19 +131,15 @@ public:
         // 避免减法下溢（理论上 dot_product 不会超过范数之和的一半的两倍）
         // D^2 = q_query_norm_sq + q_base_norm_sq - 2 * dot_product
         // 由于都是uint32_t，需要确保 2 * dot_product 不会比 q_query_norm_sq + q_base_norm_sq 大太多
-        // 但根据柯西不等式 (Σxy)^2 <= (Σx^2)(Σy^2)，dot_product 不会太大
         // D^2 理论上 >= 0
         uint64_t term1 = q_query_norm_sq;
         uint64_t term2 = q_base_norm_sq;
         uint64_t term3 = 2ULL * dot_product; // Use 64-bit intermediate to avoid overflow
 
-        // D^2 = term1 + term2 - term3 
-        // Cautious approach for potential underflow if using only uint32_t
         uint32_t distance_sq = 0;
         if (term1 + term2 >= term3) {
              distance_sq = static_cast<uint32_t>(term1 + term2 - term3);
         } else {
-            // Should theoretically not happen if math is correct, but as safeguard
             distance_sq = 0; 
         }
         
@@ -199,33 +186,7 @@ public:
         return top_k_heap; // 返回包含 Top-K 结果的堆 (最大距离在顶部)
     }
 
-    // 提供访问量化器参数的接口 (可选)
+    // 提供访问量化器参数的接口
     size_t get_vecdim() const { return vecdim; }
     size_t get_base_number() const { return base_number; }
 };
-
-// ----- 使用示例 (重要：修改了使用方式) -----
-
-/*
-// 原来的 sq_search 函数是有问题的，因为它每次都重新构建索引
-// 正确的使用方式是：
-
-// 1. 构建索引 (一次性)
-// float* base_vectors = ...; // 指向基向量数据的指针 (N * D)
-// size_t n_base = ...;        // 基向量数量
-// size_t dimension = ...;     // 向量维度
-// ScalarQuantizer quantizer(base_vectors, n_base, dimension);
-
-// 2. 执行搜索 (可多次调用)
-// float* query_vector = ...; // 指向查询向量数据的指针 (D)
-// size_t k = 10;             // 需要查找的近邻数量
-// std::priority_queue<std::pair<float, uint32_t>> results = quantizer.search(query_vector, k);
-
-// 3. 处理结果
-// while (!results.empty()) {
-//     float distance_sq = results.top().first;
-//     uint32_t index = results.top().second;
-//     // ... 处理结果 ...
-//     results.pop();
-// }
-*/
