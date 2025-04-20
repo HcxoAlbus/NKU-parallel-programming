@@ -91,7 +91,7 @@ inline float inner_product_distance_simd(const float* x, const float* y, size_t 
 // k: 要查找的最近邻数量
 // 返回: 一个包含 <距离, 索引> 对的优先队列 (最大堆)
 std::priority_queue<std::pair<float, uint32_t>> simd_search(
-    float* base, float* query, size_t base_number, size_t vecdim, size_t k) {
+    float* base, const float* query, size_t base_number, size_t vecdim, size_t k) {
     
     // 创建一个最大堆，用于存储 <距离, 索引> 对
     std::priority_queue<std::pair<float, uint32_t>> q;
