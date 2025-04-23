@@ -69,7 +69,7 @@ std::vector<SearchResult> benchmark_search(
     // 准备 ground truth 集合 (在循环外准备)
     std::vector<std::set<uint32_t>> gt_sets(test_number);
 
-    for(size_t i = 0; i < test_number && gt_valid; ++i) {
+    for(size_t i = 0; i < test_number; ++i) {
  
         for(size_t j = 0; j < k && j < test_gt_d; ++j){ // 只取 GT 的前 k 个 (并确保不越界 test_gt_d)
              int t = test_gt[j + i*test_gt_d];
@@ -99,7 +99,7 @@ std::vector<SearchResult> benchmark_search(
         size_t acc = 0;
         float recall = 0.0f; // 默认召回率为 0
 
-        if (gt_valid && i < static_cast<int>(gt_sets.size())) {
+        if (i < static_cast<int>(gt_sets.size())) {
              // *** gtset 现在只包含 GT 的前 k 个 ***
             const auto& gtset = gt_sets[i];
             if (!gtset.empty() && k > 0) {
@@ -165,10 +165,10 @@ int main(int argc, char *argv[])
     size_t test_number = 0, base_number = 0;
     size_t test_gt_d = 0, vecdim = 0;
     
-    std::string base_path = "/anndata/";
-    std::string query_path = base_path + "DEEP100K.query.fbin";
-    std::string gt_path = base_path + "DEEP100K.gt.query.100k.top100.bin";
-    std::string base_path = base_path + "DEEP100K.base.100k.fbin";
+    std::string path = "/anndata/";
+    std::string query_path =   "DEEP100K.query.fbin";
+    std::string gt_path =   "DEEP100K.gt.query.100k.top100.bin";
+    std::string base_path =   "DEEP100K.base.100k.fbin";
 
     auto test_query = LoadData<float>(query_path, test_number, vecdim);
     auto test_gt = LoadData<int>(gt_path, test_number, test_gt_d);

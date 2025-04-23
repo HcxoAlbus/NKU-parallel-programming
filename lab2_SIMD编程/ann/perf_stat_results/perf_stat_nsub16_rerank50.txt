@@ -1,0 +1,20 @@
+# started on Wed Apr 23 20:52:42 2025
+
+
+ Performance counter stats for './main --nsub 16 --rerank 50 --k 10 --num_queries 2000':
+
+   365,496,568,505      cycles                                                                  (87.52%)
+ 1,657,324,552,067      instructions                     #    4.53  insn per cycle              (87.45%)
+   276,114,431,913      L1-dcache-loads                                                         (87.50%)
+       148,129,824      L1-dcache-load-misses            #    0.05% of all L1-dcache accesses   (87.52%)
+                 0      LLC-loads                                                               (87.53%)
+       333,979,758      LLC-load-misses                                                         (87.51%)
+   296,976,122,509      branch-instructions                                                     (87.50%)
+       977,842,853      branch-misses                    #    0.33% of all branches             (74.99%)
+
+     172.412158711 seconds time elapsed
+
+     153.518420000 seconds user
+       8.050308000 seconds sys
+
+
