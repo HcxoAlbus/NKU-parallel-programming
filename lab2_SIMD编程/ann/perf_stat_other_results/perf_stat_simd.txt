@@ -1,0 +1,20 @@
+# started on Thu Apr 24 19:32:48 2025
+
+
+ Performance counter stats for './main --algo simd --k 10 --num_queries 2000':
+
+    10,547,382,974      cycles                                                                  (87.53%)
+    35,940,179,381      instructions                     #    3.41  insn per cycle              (87.54%)
+    10,552,439,013      L1-dcache-loads                                                         (87.61%)
+        68,618,368      L1-dcache-load-misses            #    0.65% of all L1-dcache accesses   (87.45%)
+                 0      LLC-loads                                                               (87.53%)
+     1,208,938,430      LLC-load-misses                                                         (87.54%)
+     3,454,566,049      branch-instructions                                                     (87.33%)
+         1,892,428      branch-misses                    #    0.05% of all branches             (75.00%)
+
+       5.254019324 seconds time elapsed
+
+       4.545707000 seconds user
+       0.286207000 seconds sys
+
+

@@ -1,0 +1,4 @@
+algorithm,recall,latency_us
+flat,0.99995,6212.747
+simd,0.99995,1848.106
+sq,0.92055,770.343

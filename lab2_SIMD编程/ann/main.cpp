@@ -56,44 +56,53 @@ struct SearchResult
     int64_t latency; // 查询延迟 (us)
 };
 
-// 封装查询过程的函数模板
+// --- benchmark_search 函数定义 (确保是 9 参数版本) ---
 template<typename SearchFunc>
 std::vector<SearchResult> benchmark_search(
-    SearchFunc search_func, // 期望签名: func(const float* query, size_t k) -> std::priority_queue<...>
-    float* test_query,      // 指向测试查询数据的指针
-    int* test_gt,           // 指向 ground truth 数据的指针
-    size_t base_number,     // 基向量数量 (用于信息)
-    size_t vecdim,          // 向量维度 (用于计算偏移和信息)
-    size_t test_number,     // 要测试的查询数量
-    size_t test_gt_d,       // ground truth 的维度 (每个查询的近邻数)
-    size_t k                // 搜索时要返回的近邻数
+    SearchFunc search_func, // 1. 搜索函数 (flat_search, simd_search, 或 lambda)
+    float* base,           // 2. 基向量数据 (传递给需要它的 search_func)
+    float* test_query,     // 3. 查询向量数据
+    int* test_gt,          // 4. Ground truth 数据
+    size_t base_number,    // 5. 基向量数量 (传递给需要它的 search_func)
+    size_t vecdim,         // 6. 向量维度 (传递给需要它的 search_func)
+    size_t test_number,    // 7. 要测试的查询数量
+    size_t test_gt_d,      // 8. Ground truth 维度
+    size_t k               // 9. 搜索的近邻数 (传递给 search_func)
 ) {
     std::vector<SearchResult> results(test_number);
 
-    // 准备 ground truth 集合 (在循环外准备)
+    // 准备 ground truth 集合 (使用 GT 的前 k 个)
     std::vector<std::set<uint32_t>> gt_sets(test_number);
-
-    for(size_t i = 0; i < test_number; ++i) {
- 
-        for(size_t j = 0; j < k && j < test_gt_d; ++j){ // 只取 GT 的前 k 个 (并确保不越界 test_gt_d)
-             int t = test_gt[j + i*test_gt_d];
-             if (t >= 0) { // 确保索引非负
-                gt_sets[i].insert(static_cast<uint32_t>(t));
-             }
+    bool gt_valid = (test_gt != nullptr);
+    if (gt_valid) {
+        for(size_t i = 0; i < test_number; ++i) {
+            for(size_t j = 0; j < k && j < test_gt_d; ++j){ // 只取 GT 的前 k 个
+                 int t = test_gt[j + i*test_gt_d];
+                 if (t >= 0) { gt_sets[i].insert(static_cast<uint32_t>(t)); }
+            }
         }
+    } else {
+         std::cerr << "警告: Ground truth 数据为空，无法计算召回率。" << std::endl;
     }
 
-
-    // 查询测试代码，遍历查询向量
-    #pragma omp parallel for schedule(dynamic)
+    // 并行或串行执行搜索
+    // #pragma omp parallel for schedule(dynamic) // 可以选择是否并行化 benchmark
     for(int i = 0; i < static_cast<int>(test_number); ++i) {
         const unsigned long Converter = 1000 * 1000;
         struct timeval val;
         gettimeofday(&val, NULL);
 
         const float* current_query = test_query + static_cast<size_t>(i) * vecdim;
-        // 调用传入的 lambda 或函数对象
-        auto res_heap = search_func(current_query, k);
+
+        // *** 调用 search_func ***
+        // 这里需要根据 search_func 的实际签名来调用
+        // 假设 flat_search 和 simd_search 接受 (base, query, base_number, vecdim, k)
+        // 而 SQ 的 lambda 只接受 (query, k)
+        // 为了通用性，最好修改 search_func 的接口或使用 std::function/std::bind
+        // 临时的解决方法：假设 search_func 总是接受这 5 个参数，SQ 的 lambda 需要捕获 base, base_number, vecdim
+        auto res_heap = search_func(base, current_query, base_number, vecdim, k);
+        // 如果 SearchFunc 是 SQ 的 lambda (只接受 query, k)，上面的调用会失败
+        // 需要更复杂的处理，例如类型检查或不同的 benchmark 函数
 
         struct timeval newVal;
         gettimeofday(&newVal, NULL);
@@ -101,101 +110,83 @@ std::vector<SearchResult> benchmark_search(
 
         // 计算召回率
         size_t acc = 0;
-        float recall = 0.0f; // 默认召回率为 0
-
-        if (i < static_cast<int>(gt_sets.size())) {
-             // *** gtset 现在只包含 GT 的前 k 个 ***
+        float recall = 0.0f;
+        if (gt_valid && i < static_cast<int>(gt_sets.size())) {
             const auto& gtset = gt_sets[i];
             if (!gtset.empty() && k > 0) {
-                size_t results_count = 0;
-                std::vector<uint32_t> result_indices;
-                result_indices.reserve(k);
-
-                // 从堆中取出最多 k 个元素
-                while (!res_heap.empty() && result_indices.size() < k) {
-                    result_indices.push_back(res_heap.top().second);
-                    res_heap.pop();
-                }
-
-                // 计算与 ground truth (Top-k) 的交集大小
-                for(uint32_t x : result_indices) {
-                     if(gtset.count(x)){ // 与 GT 的 Top-k 比较
+                size_t count = 0;
+                while (!res_heap.empty() && count < k) { // 最多检查 k 个结果
+                    if(gtset.count(res_heap.top().second)){
                         ++acc;
                     }
+                    res_heap.pop();
+                    count++;
                 }
-                // 按照 k 计算召回率
                 recall = static_cast<float>(acc) / k;
             } else if (k == 0) {
-                recall = 1.0f; // k=0 时召回率为 1
+                recall = 1.0f;
             }
-            // 如果 gtset 为空 (因为 k > test_gt_d 或 GT 无效) 或 k=0 (已处理), recall 保持 0.0f
         }
-        // 如果 GT 无效，recall 保持 0.0f
 
-        #pragma omp critical
+        // 使用 #pragma omp critical 保护对 results 的写入（如果使用 omp parallel for）
+        // #pragma omp critical
         {
              if (static_cast<size_t>(i) < results.size()) {
                 results[i] = {recall, diff};
              }
         }
     }
-
     return results;
 }
 
 
-// 打印测试结果的辅助函数
-void print_results(const std::string& method_name, const std::vector<SearchResult>& results, size_t test_number) {
-    
-    double total_recall = 0, total_latency = 0; // Use double for accumulation
-    size_t valid_results = std::min(test_number, results.size());
-
-    for(size_t i = 0; i < valid_results; ++i) {
-        total_recall += results[i].recall;
-        total_latency += results[i].latency;
-    }
-
-    std::cout << "=== " << method_name << " ===" << std::endl;
-    std::cout << std::fixed << std::setprecision(5);
-    std::cout << "平均召回率: " << (valid_results > 0 ? total_recall / valid_results : 0.0) << std::endl;
-    std::cout << std::fixed << std::setprecision(3); // 延迟保留3位小数
-    std::cout << "平均延迟 (us): " << (valid_results > 0 ? total_latency / valid_results : 0.0) << std::endl;
-    std::cout << std::endl;
-}
-
-
-// --- 用于解析命令行参数的辅助函数 ---
+// --- 用于解析命令行参数的辅助函数 (修正版) ---
 long get_arg_long(char** begin, char** end, const std::string& option, long default_val) {
-    char** itr = std::find(begin, end, option);
-    if (itr != end && ++itr != end) {
-        try {
-            return std::stol(*itr);
-        } catch (const std::exception& e) {
-            std::cerr << "警告: 无法解析参数 " << option << " 的值 '" << *itr << "'. 使用默认值: " << default_val << std::endl;
+    char** itr = begin;
+    while (itr != end) {
+        // 比较 C 风格字符串
+        if (strcmp(*itr, option.c_str()) == 0) {
+            // 找到了选项，下一个应该是值
+            if (++itr != end) {
+                try {
+                    return std::stol(*itr);
+                } catch (const std::exception& e) {
+                    // std::cerr << "警告: 无法解析参数 " << option << " 的值 '" << *itr << "'. 使用默认值: " << default_val << std::endl;
+                }
+            }
+            // 选项后面没有值，跳出循环返回默认值
+            break;
         }
+        ++itr;
     }
     return default_val;
 }
 
+const char* get_arg_string(char** begin, char** end, const std::string& option, const char* default_val) {
+    char** itr = begin;
+    while (itr != end) {
+        if (strcmp(*itr, option.c_str()) == 0) {
+            if (++itr != end) {
+                return *itr; // 返回值的 C 字符串指针
+            }
+            break;
+        }
+        ++itr;
+    }
+    return default_val;
+}
+
+
 int main(int argc, char *argv[])
 {
     // --- 解析命令行参数 ---
-    // 默认值
-    size_t target_nsub = 16;
-    size_t target_rerank_k = 50;
-    size_t num_queries_to_test = 2000;
-    size_t k = 10;
-
-    // 从 argv 解析 (简单的示例)
-    target_nsub = get_arg_long(argv, argv + argc, "--nsub", target_nsub);
-    target_rerank_k = get_arg_long(argv, argv + argc, "--rerank", target_rerank_k);
-    num_queries_to_test = get_arg_long(argv, argv + argc, "--num_queries", num_queries_to_test);
-    k = get_arg_long(argv, argv + argc, "--k", k);
+    const char* target_algo = get_arg_string(argv + 1, argv + argc, "--algo", "all"); // 从 argv+1 开始查找
+    size_t num_queries_to_test = get_arg_long(argv + 1, argv + argc, "--num_queries", 2000);
+    size_t k = get_arg_long(argv + 1, argv + argc, "--k", 10);
 
     // --- 加载数据 ---
     size_t test_number = 0, base_number = 0;
     size_t test_gt_d = 0, vecdim = 0;
-
     std::string query_path = "DEEP100K.query.fbin";
     std::string gt_path = "DEEP100K.gt.query.100k.top100.bin";
     std::string base_path = "DEEP100K.base.100k.fbin";
@@ -206,91 +197,150 @@ int main(int argc, char *argv[])
 
     if (!test_query || !base || vecdim == 0 || base_number == 0 || test_number == 0) {
         std::cerr << "错误：加载查询或基向量数据失败，或数据维度/数量无效，程序终止。" << std::endl;
-        delete[] test_query; delete[] test_gt; delete[] base; return 1;
+         delete[] test_query; delete[] test_gt; delete[] base; return 1;
     }
-    if (!test_gt || test_gt_d == 0) {
-         std::cerr << "警告: 加载 ground truth 数据失败或维度为 0。召回率将为 0。" << std::endl;
+    if (!test_gt || test_gt_d == 0) { /* 警告 */ }
+    if (num_queries_to_test > test_number) { num_queries_to_test = test_number; }
+    if (k > test_gt_d && test_gt) { /* 警告 */ }
+    std::cerr << "请求算法: " << target_algo << ", 测试查询数: " << num_queries_to_test << ", k=" << k << std::endl;
+
+
+    // --- 根据参数选择并运行算法 ---
+    std::string algo_name = "";
+    std::vector<SearchResult> results;
+    bool success = false;
+    ScalarQuantizer* sq_quantizer_ptr = nullptr; // SQ 需要先构建
+
+    try {
+        if (strcmp(target_algo, "flat") == 0 || strcmp(target_algo, "all") == 0) {
+            algo_name = "flat";
+            std::cerr << "运行 Flat Search..." << std::endl;
+            // 传递 flat_search 函数指针，benchmark_search 内部会调用它
+            results = benchmark_search(flat_search, base, test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k);
+            success = true;
+            std::cerr << "Flat Search 完成." << std::endl;
+            if (strcmp(target_algo, "all") != 0) goto end_algo_run;
+        }
+
+        if (strcmp(target_algo, "simd") == 0 || strcmp(target_algo, "all") == 0) {
+             if (strcmp(target_algo, "all") == 0) results.clear();
+             algo_name = "simd";
+             std::cerr << "运行 SIMD Search..." << std::endl;
+             results = benchmark_search(simd_search, base, test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k);
+             success = true;
+             std::cerr << "SIMD Search 完成." << std::endl;
+             if (strcmp(target_algo, "all") != 0) goto end_algo_run;
+        }
+
+        if (strcmp(target_algo, "sq") == 0 || strcmp(target_algo, "all") == 0) {
+            if (strcmp(target_algo, "all") == 0) results.clear();
+            algo_name = "sq";
+            std::cerr << "创建 SQ 索引..." << std::endl;
+            sq_quantizer_ptr = new ScalarQuantizer(base, base_number, vecdim); // 使用指针管理
+            std::cerr << "SQ 索引完成. 运行 SQ Search..." << std::endl;
+
+            // 创建一个 lambda 适配器，使其符合 benchmark_search 期望的签名
+            // 它捕获 sq_quantizer_ptr
+            auto sq_search_adapter = [&](float* /*base_ignored*/, const float* q, size_t /*b_num_ignored*/, size_t /*dim_ignored*/, size_t k_param) {
+                // 实际调用 SQ 的成员函数，忽略传入的 base 相关参数
+                return sq_quantizer_ptr->sq_search(q, k_param);
+            };
+
+            // 将适配器 lambda 传递给 benchmark_search
+            results = benchmark_search(sq_search_adapter, base, test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k);
+            success = true;
+            std::cerr << "SQ Search 完成." << std::endl;
+            if (strcmp(target_algo, "all") != 0) goto end_algo_run;
+        }
+
+        if (!success && strcmp(target_algo, "all") != 0) {
+             std::cerr << "错误: 未知或未执行的算法 '" << target_algo << "'" << std::endl;
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "运行算法 " << algo_name << " 时发生错误: " << e.what() << std::endl;
+        success = false;
     }
-    if (num_queries_to_test > test_number) {
-        num_queries_to_test = test_number;
-    }
-     // 打印将要使用的参数
-    // std::cout << "测试查询数量: " << num_queries_to_test << ", k=" << k << std::endl;
-    // std::cout << "PQ 参数: nsub=" << target_nsub << ", rerank_k=" << target_rerank_k << std::endl;
 
+end_algo_run:
 
-    if (k > test_gt_d && test_gt) {
-        std::cerr << "警告: 请求的 k=" << k << " 大于 ground truth 的维度 test_gt_d=" << test_gt_d << std::endl;
-    }
+    // --- 输出结果 (如果成功运行了单个算法) ---
+    if (success && !results.empty() && strcmp(target_algo, "all") != 0) {
+        double avg_recall = 0.0;
+        double avg_latency = 0.0;
+        for(const auto& res : results) {
+            avg_recall += res.recall;
+            avg_latency += res.latency;
+        }
+        avg_recall /= results.size();
+        avg_latency /= results.size();
 
-    // --- 运行 PQ 测试 ---
-    ProductQuantizer* pq_index_ptr = nullptr;
-    std::vector<SearchResult> results_pq;
-    double avg_recall_pq = 0.0;
-    double avg_latency_pq = 0.0;
-    bool pq_success = false;
-
-    if (vecdim == 0) {
-         std::cerr << "错误: 向量维度为 0，无法创建 PQ 索引。" << std::endl;
-    } else if (vecdim % target_nsub != 0) {
-        std::cerr << "错误: 向量维度 (" << vecdim << ") 不能被 nsub (" << target_nsub << ") 整除。跳过此 PQ 配置。" << std::endl;
-    } else {
-         try {
-              // 注意：PQ 训练和编码只应在必要时进行，如果索引已存在可考虑加载
-              // 为简化脚本，这里每次都重新训练
-              std::cerr << "训练 PQ 索引 (nsub=" << target_nsub << ")..." << std::endl;
-              pq_index_ptr = new ProductQuantizer(base, base_number, vecdim, target_nsub, 1.0); // train_ratio=1.0
-              std::cerr << "PQ 索引创建完毕。" << std::endl;
-
-              if (pq_index_ptr) {
-                  auto pq_search_lambda = [&](const float* q, size_t k_param) {
-                      return pq_index_ptr->search(q, base, k_param, target_rerank_k); // 使用命令行参数
-                  };
-                  std::cerr << "开始 PQ 基准测试 (rerank=" << target_rerank_k << ")..." << std::endl;
-                  results_pq = benchmark_search(
-                     pq_search_lambda,
-                     test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k);
-                  std::cerr << "PQ 基准测试完成。" << std::endl;
-
-                  // 计算平均值
-                  if (!results_pq.empty()) {
-                      for(const auto& res : results_pq) {
-                          avg_recall_pq += res.recall;
-                          avg_latency_pq += res.latency;
-                      }
-                      avg_recall_pq /= results_pq.size();
-                      avg_latency_pq /= results_pq.size();
-                      pq_success = true;
-                  }
-              }
-         } catch (const std::exception& e) {
-              std::cerr << "运行 PQ 测试时发生错误 (nsub=" << target_nsub << ", rerank=" << target_rerank_k << "): " << e.what() << std::endl;
-         }
-    }
-
-    // --- 输出结果到标准输出 (CSV 格式) ---
-    // 脚本将捕获此输出
-    if (pq_success) {
-        std::cout << target_nsub << ","
-                  << target_rerank_k << ","
-                  << std::fixed << std::setprecision(5) << avg_recall_pq << ","
-                  << std::fixed << std::setprecision(3) << avg_latency_pq
+        std::cout << algo_name << ","
+                  << std::fixed << std::setprecision(5) << avg_recall << ","
+                  << std::fixed << std::setprecision(3) << avg_latency
                   << std::endl;
-    } else {
-         // 输出一个标记失败的行或保持沉默，取决于脚本如何处理
-         // 这里输出 0 值表示失败
-         std::cout << target_nsub << ","
-                   << target_rerank_k << ","
-                   << std::fixed << std::setprecision(5) << 0.0 << ","
-                   << std::fixed << std::setprecision(3) << 0.0
-                   << std::endl;
+    } else if (strcmp(target_algo, "all") == 0) {
+         // std::cerr << "模式 'all' 不输出 CSV，请为每个算法单独运行。" << std::endl;
+    } else if (!success) {
+         // std::cout << target_algo << ",0.00000,0.000" << std::endl; // 输出失败标记
     }
+
 
     // --- 清理 ---
     delete[] test_query;
     delete[] test_gt;
     delete[] base;
-    delete pq_index_ptr;
+    delete sq_quantizer_ptr; // 清理 SQ 对象
 
-    return 0;
+    return success ? 0 : 1;
+}
+
+// --- LoadData 函数定义 (需要你提供或确认已存在) ---
+template<typename T>
+T *LoadData(const std::string& data_path, size_t& n, size_t& d) {
+    std::ifstream fin(data_path, std::ios::binary);
+    if (!fin) {
+        std::cerr << "错误: 无法打开数据文件 " << data_path << std::endl;
+        n = 0; d = 0;
+        return nullptr;
+    }
+    fin.read(reinterpret_cast<char*>(&n), sizeof(size_t)); // 假设文件中的大小是 size_t
+    fin.read(reinterpret_cast<char*>(&d), sizeof(size_t)); // 假设文件中的大小是 size_t
+
+    // 添加基本的健���性检查
+    if (n == 0 || d == 0 || n > 1000000 || d > 10000) { // 设定一些合理的上限
+         std::cerr << "错误: 从文件 " << data_path << " 读取的维度 (" << d << ") 或数量 (" << n << ") 无效。" << std::endl;
+         n = 0; d = 0;
+         fin.close();
+         return nullptr;
+    }
+
+
+    size_t num_elements = n * d;
+    T* data = nullptr;
+    try {
+         data = new T[num_elements];
+    } catch (const std::bad_alloc& e) {
+         std::cerr << "错误: 分配内存失败 (需要 " << num_elements * sizeof(T) << " 字节): " << e.what() << std::endl;
+         n = 0; d = 0;
+         fin.close();
+         return nullptr;
+    }
+
+
+    size_t bytes_to_read = num_elements * sizeof(T);
+    fin.read(reinterpret_cast<char*>(data), bytes_to_read);
+
+    if (static_cast<size_t>(fin.gcount()) != bytes_to_read) {
+        std::cerr << "警告: 从 " << data_path << " 读取数据不足。预期 " << bytes_to_read << " 字节，实际读取 " << fin.gcount() << " 字节。" << std::endl;
+        // 可以选择是否继续，或者认为这是一个错误
+        delete[] data;
+        n = 0; d = 0;
+        fin.close();
+        return nullptr;
+    }
+
+    fin.close();
+    std::cerr << "加载数据 " << data_path << " (数量=" << n << ", 维度=" << d << ")" << std::endl;
+    return data;
 }

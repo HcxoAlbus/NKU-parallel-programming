@@ -1,0 +1,20 @@
+# started on Thu Apr 24 19:32:58 2025
+
+
+ Performance counter stats for './main --algo sq --k 10 --num_queries 2000':
+
+     4,413,425,851      cycles                                                                  (87.39%)
+    18,890,483,699      instructions                     #    4.28  insn per cycle              (87.14%)
+     3,956,258,239      L1-dcache-loads                                                         (87.47%)
+        13,240,217      L1-dcache-load-misses            #    0.33% of all L1-dcache accesses   (87.59%)
+                 0      LLC-loads                                                               (87.64%)
+       326,086,343      LLC-load-misses                                                         (87.57%)
+     2,512,305,149      branch-instructions                                                     (87.66%)
+         1,432,415      branch-misses                    #    0.06% of all branches             (74.92%)
+
+       2.191745809 seconds time elapsed
+
+       1.855481000 seconds user
+       0.148553000 seconds sys
+
+

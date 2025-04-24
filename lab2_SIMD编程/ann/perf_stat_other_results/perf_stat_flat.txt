@@ -1,0 +1,20 @@
+# started on Thu Apr 24 19:32:16 2025
+
+
+ Performance counter stats for './main --algo flat --k 10 --num_queries 2000':
+
+    36,380,761,688      cycles                                                                  (87.44%)
+   118,837,136,899      instructions                     #    3.27  insn per cycle              (87.49%)
+    39,338,017,784      L1-dcache-loads                                                         (87.44%)
+        18,343,440      L1-dcache-load-misses            #    0.05% of all L1-dcache accesses   (87.51%)
+                 0      LLC-loads                                                               (87.50%)
+     1,223,208,181      LLC-load-misses                                                         (87.56%)
+    20,150,615,716      branch-instructions                                                     (87.53%)
+         4,802,250      branch-misses                    #    0.02% of all branches             (74.97%)
+
+      18.336329759 seconds time elapsed
+
+      15.687283000 seconds user
+       0.989322000 seconds sys
+
+
