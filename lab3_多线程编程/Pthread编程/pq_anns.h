@@ -53,6 +53,11 @@ private:
     // 连续存储编码: [vec0_sub0, ..., vec0_subN-1, vec1_sub0, ...] (nbase * nsub)
     std::vector<uint8_t> flat_codes;
 
+    // Mutable for query-time distance table caching
+    // This table is specific to a query.
+    mutable std::vector<float> query_distance_table_cache;
+    mutable bool query_distance_table_valid;
+
     // --- 私有辅助方法 ---
 
     // 对单个子空间进行 k-means 聚类
@@ -305,24 +310,56 @@ private:
         }
     }
 
+    void ensure_query_distance_table(const float* query) const {
+        // This check isn't perfect for identifying if the table is for the *current* query
+        // A more robust way would be to pass the query pointer and check if it changed.
+        // For simplicity, we assume if it's valid, it's for the current query context.
+        // In a multi-threaded search scenario, each thread might need its own table or careful synchronization.
+        // For IVFPQ, the search_lists_pq_worker_static might call this.
+        // If multiple threads call this for the SAME query, it's redundant but safe due to const.
+        // If different queries, then this cache is problematic.
+        // Let's make it non-mutable and compute it directly in compute_asymmetric_distance_sq
+        // Or, the caller (worker thread) computes its own distance table.
+
+        // For IVFPQ, each worker thread will compute its own distance table for the query.
+        // So, query_distance_table_cache and query_distance_table_valid are removed from class members.
+        // Instead, compute_asymmetric_distance_sq will take a precomputed table or compute it.
+    }
+
 public:
     // 构造函数: 训练并编码数据
     ProductQuantizer(const float* base, size_t nbase_, size_t vecdim_, size_t nsub_ = 8, double train_ratio = 1.0)
         : vecdim(vecdim_),
           nsub(nsub_),
-          dsub( (nsub_ == 0 || vecdim_ % nsub_ != 0) ? 0 : vecdim_ / nsub_ ),
-          ksub(256),
+          dsub( (nsub_ == 0 || vecdim_ % nsub_ != 0) ? 0 : vecdim_ / nsub_ ), // Basic validation
+          ksub(256), // Typically 2^8
           nbase(nbase_)
+          // query_distance_table_valid(false) // Removed
     {
-
+        if (dsub == 0 && vecdim > 0 && nsub > 0) { // vecdim not divisible by nsub
+             throw std::invalid_argument("ProductQuantizer: vecdim must be divisible by nsub.");
+        }
+        if (vecdim == 0 || nsub == 0) {
+             throw std::invalid_argument("ProductQuantizer: vecdim and nsub must be greater than zero.");
+        }
+        // ... rest of the constructor (train, encode) ...
+// ... existing constructor ...
         // --- 训练 ---
         size_t ntrain = static_cast<size_t>(static_cast<double>(nbase) * train_ratio);
-        ntrain = std::max(static_cast<size_t>(ksub * 39), std::min(nbase, ntrain)); // FAISS 建议至少 ksub*39 个训练点
+        ntrain = std::max(static_cast<size_t>(ksub * 39), std::min(nbase, ntrain)); 
         
-        if (ntrain > nbase) ntrain = nbase; // 不能超过基向量总数
+        if (ntrain > nbase) ntrain = nbase; 
+        if (ntrain == 0 && nbase > 0) ntrain = nbase; // If calculated ntrain is 0 but base exists, train on all
+        if (ntrain == 0 && nbase == 0) {
+            std::cout << "PQ Training: No base data to train on." << std::endl;
+            // flat_centroids and flat_codes will be empty.
+            // search will return empty.
+            return; // Exit constructor early if no data
+        }
+
 
         const float* train_data_ptr = base;
-        std::vector<float> train_subset; // 用于存储训练数据的子集
+        std::vector<float> train_subset; 
 
         if (ntrain < nbase) {
             std::cout << "PQ Training using a subset of " << ntrain << " vectors..." << std::endl;
@@ -346,19 +383,64 @@ public:
         }
 
         auto start_train = std::chrono::high_resolution_clock::now();
-        train(train_data_ptr, ntrain);
+        train(train_data_ptr, ntrain); // train_data_ptr might be base or train_subset
         auto end_train = std::chrono::high_resolution_clock::now();
         auto duration_train = std::chrono::duration_cast<std::chrono::milliseconds>(end_train - start_train);
         std::cout << "PQ Training finished in " << duration_train.count() << " ms." << std::endl;
 
 
         // --- 编码 ---
-        std::cout << "PQ Encoding nbase=" << nbase << " vectors..." << std::endl;
-         auto start_encode = std::chrono::high_resolution_clock::now();
-        encode(base);
-        auto end_encode = std::chrono::high_resolution_clock::now();
-        auto duration_encode = std::chrono::duration_cast<std::chrono::milliseconds>(end_encode - start_encode);
-        std::cout << "PQ Encoding finished in " << duration_encode.count() << " ms." << std::endl;
+        if (nbase > 0) { // Only encode if there is base data
+            std::cout << "PQ Encoding nbase=" << nbase << " vectors..." << std::endl;
+            auto start_encode = std::chrono::high_resolution_clock::now();
+            encode(base);
+            auto end_encode = std::chrono::high_resolution_clock::now();
+            auto duration_encode = std::chrono::duration_cast<std::chrono::milliseconds>(end_encode - start_encode);
+            std::cout << "PQ Encoding finished in " << duration_encode.count() << " ms." << std::endl;
+        } else {
+            std::cout << "PQ Encoding: No base data to encode." << std::endl;
+        }
+    }
+
+    // Method to precompute distance table for a query
+    // The table stores || query_sub - centroid[sub][code] ||^2
+    void compute_query_distance_table(const float* query, std::vector<float>& table_output) const {
+        if (flat_centroids.empty()) return; // No centroids to compute against
+        table_output.resize(nsub * ksub);
+        // #pragma omp parallel for // Can be parallelized if nsub is large
+        for (size_t sub = 0; sub < nsub; ++sub) {
+            const float* query_sub_vec = query + sub * dsub;
+            const float* current_sub_centroids = flat_centroids.data() + sub * ksub * dsub;
+            float* table_sub_ptr = table_output.data() + sub * ksub;
+
+            for (size_t c = 0; c < ksub; ++c) {
+                const float* centroid = current_sub_centroids + c * dsub;
+                table_sub_ptr[c] = compute_l2_sq_neon(query_sub_vec, centroid, dsub);
+            }
+        }
+    }
+
+    // Computes squared L2 distance using ADC with a precomputed distance table
+    float compute_asymmetric_distance_sq_with_table(const uint8_t* item_code, const std::vector<float>& query_dist_table) const {
+        float approx_dist_sq = 0.0f;
+        if (query_dist_table.size() != nsub * ksub) {
+            // This indicates an issue, table not correctly sized or passed.
+            // For safety, could return max float or throw.
+            // std::cerr << "Warning: query_dist_table has incorrect size in compute_asymmetric_distance_sq_with_table." << std::endl;
+            return std::numeric_limits<float>::max();
+        }
+        for (size_t sub = 0; sub < nsub; ++sub) {
+            approx_dist_sq += query_dist_table[sub * ksub + item_code[sub]];
+        }
+        return approx_dist_sq;
+    }
+    
+    // New method for IVFPQ: get code for a specific item
+    const uint8_t* get_code_for_item(uint32_t item_original_idx) const {
+        if (item_original_idx >= nbase || flat_codes.empty()) {
+            return nullptr;
+        }
+        return flat_codes.data() + static_cast<size_t>(item_original_idx) * nsub;
     }
 
     // 使用 ADC L2 距离搜索 k 个最近邻，并可选进行重排序
@@ -368,53 +450,32 @@ public:
     // rerank_k: PQ 搜索阶段返回的候选数量 (p)，用于重排序。如果 rerank_k <= k 或 base_data == nullptr，则不进行重排序。
     std::priority_queue<std::pair<float, uint32_t>> search(
         const float* query,
-        const float* base_data, // 指向原始基向量数据的指针 (nbase * vecdim)，用于重排序
+        const float* base_data, 
         size_t k,
-        size_t rerank_k = 0    // PQ 搜索阶段返回的候选数量 (p)，用于重排序
+        size_t rerank_k = 0    
     ) const {
-
-        // 最小堆用于存储最终结果 <距离平方, 索引>
         std::priority_queue<std::pair<float, uint32_t>> final_results_heap;
-        if (k == 0 || nbase == 0) return final_results_heap;
+        if (k == 0 || nbase == 0 || flat_codes.empty() || flat_centroids.empty()) return final_results_heap;
         if (query == nullptr) throw std::invalid_argument("Query vector pointer cannot be null.");
 
-        // --- 阶段 1: PQ 近似搜索 ---
-        // 确定 PQ 搜索阶段需要找多少个候选者
         size_t pq_search_k = (rerank_k > k && base_data != nullptr) ? rerank_k : k;
-        if (pq_search_k > nbase) pq_search_k = nbase; // 不能超过基向量总数
+        if (pq_search_k > nbase) pq_search_k = nbase;
 
-        // 临时最大堆用于 PQ 搜索 <近似距离平方, 索引>
-        std::priority_queue<std::pair<float, uint32_t>> pq_heap;
+        std::priority_queue<std::pair<float, uint32_t>> pq_heap; // Max heap for ADC results
 
-        // 1. 计算距离表: dist_table[sub][code] = || query_sub - centroid[sub][code] ||^2
-        // 使用 alignas 或 posix_memalign 可能有助于 NEON 性能，但标准 vector 也可以
-        std::vector<float> distance_table(nsub * ksub);
-
-        // 并行化距离表计算 ( nsub 很大)
-        // #pragma omp parallel for
-        for (size_t sub = 0; sub < nsub; ++sub) {
-            const float* query_sub_vec = query + sub * dsub;
-            const float* sub_centroids = flat_centroids.data() + sub * ksub * dsub;
-            float* table_sub_ptr = distance_table.data() + sub * ksub;
-
-            for (size_t c = 0; c < ksub; ++c) {
-                const float* centroid = sub_centroids + c * dsub;
-                table_sub_ptr[c] = compute_l2_sq_neon(query_sub_vec, centroid, dsub);
-            }
+        // 1. Compute distance table for the current query
+        std::vector<float> current_query_distance_table;
+        compute_query_distance_table(query, current_query_distance_table);
+        if (current_query_distance_table.empty()) { // Failed to compute (e.g. no centroids)
+            return final_results_heap;
         }
 
-        // 2. 计算所有基向量的近似距离并维护 PQ 堆
+
+        // 2. Calculate approximate distances using the table
         for (size_t i = 0; i < nbase; ++i) {
             const uint8_t* code_ptr = flat_codes.data() + i * nsub;
-            float approx_dist_sq = 0.0f;
+            float approx_dist_sq = compute_asymmetric_distance_sq_with_table(code_ptr, current_query_distance_table);
 
-            // 累加各子空间的距离
-            // 可以考虑循环展开或 SIMD 优化这里的累加
-            for (size_t sub = 0; sub < nsub; ++sub) {
-                approx_dist_sq += distance_table[sub * ksub + code_ptr[sub]];
-            }
-
-            // 维护 top-pq_search_k 堆 (最大堆)
             if (pq_heap.size() < pq_search_k) {
                 pq_heap.push({approx_dist_sq, static_cast<uint32_t>(i)});
             } else if (approx_dist_sq < pq_heap.top().first) {
@@ -423,52 +484,25 @@ public:
             }
         }
 
-        // --- 阶段 2: 重排序 ---
-        // 如果不需要重排序，直接返回 PQ 结果
         bool perform_reranking = (rerank_k > k && base_data != nullptr);
 
         if (!perform_reranking) {
-            // 如果不重排序，直接返回 PQ 结果 (需要转换成最小堆形式，或者直接返回 pq_heap)
-            // 为了统一返回类型，我们将 pq_heap (最大堆) 转换为 final_results_heap (最小堆)
-             while (!pq_heap.empty()) {
-                 final_results_heap.push(pq_heap.top()); // 结果顺序可能与预期相反，取决于如何使用
-                 pq_heap.pop();
-             }
-             // 注意：上面的转换结果是按距离从大到小排列的。如果需要从小到大，需要反转或使用不同的结构。
-             // 或者，如果 benchmark_search 处理最大堆没问题，可以直接返回 pq_heap。
-             // 假设 benchmark_search 需要从小到大的结果（因为它用了 std::set），我们需要正确构建 final_results_heap。
-             // 清空 final_results_heap 并重新构建
-             std::vector<std::pair<float, uint32_t>> temp_results;
-             while (!pq_heap.empty()) {
-                 temp_results.push_back(pq_heap.top());
-                 pq_heap.pop();
-             }
-             // 现在 temp_results 包含了 pq_search_k 个结果，距离最大的在前面
-             // 我们只需要 k 个，并且需要按距离从小到大
-             std::sort(temp_results.begin(), temp_results.end()); // 按距离升序排序
-             // 取前 k 个放入最小堆（虽然直接用 vector 可能更简单）
-             for(size_t i = 0; i < std::min((size_t)k, temp_results.size()); ++i) {
-                 final_results_heap.push(temp_results[i]);
-             }
-             // 返回包含前 k 个近似结果的最小堆
-             return final_results_heap;
-
-
+            // ...existing code...
+            return pq_heap;
         } else {
-            // 执行重排序
-            // 1. 从 pq_heap 中提取候选者索引
+            // Reranking
             std::vector<uint32_t> candidate_indices;
-            candidate_indices.reserve(pq_heap.size());
+            candidate_indices.reserve(pq_heap.size()); // pq_heap contains rerank_k candidates
             while (!pq_heap.empty()) {
                 candidate_indices.push_back(pq_heap.top().second);
-                pq_heap.pop();
+                pq_heap.pop(); // Empties pq_heap
             }
-             // candidate_indices 现在包含了 pq_search_k 个候选者的索引
 
-            // 2. 计算精确距离并维护最终的 top-k 最小堆
+            // final_results_heap is already a std::priority_queue (max-heap by default)
+            // We will use it to store the k items with the smallest exact distances.
             for (uint32_t idx : candidate_indices) {
-                const float* base_vec = base_data + static_cast<size_t>(idx) * vecdim; // 使用 static_cast
-                float exact_dist_sq = compute_l2_sq_neon(query, base_vec, vecdim);
+                const float* exact_vec = base_data + static_cast<size_t>(idx) * vecdim;
+                float exact_dist_sq = compute_l2_sq_neon(query, exact_vec, vecdim); // Exact L2 distance
 
                 if (final_results_heap.size() < k) {
                     final_results_heap.push({exact_dist_sq, idx});
@@ -477,11 +511,11 @@ public:
                     final_results_heap.push({exact_dist_sq, idx});
                 }
             }
-            // 返回包含重排序后 top-k 结果的最小堆
+            // final_results_heap now contains the k best items according to exact L2 distance,
+            // and is in the max-heap format benchmark_search expects.
             return final_results_heap;
         }
     }
-
     // 访问器
     size_t get_vecdim() const { return vecdim; }
     size_t get_nsub() const { return nsub; }
