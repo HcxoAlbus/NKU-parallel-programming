@@ -1,0 +1,20 @@
+# started on Wed May 21 19:03:11 2025
+
+
+ Performance counter stats for './main ./ --method sq':
+
+     4,551,190,136      cycles                                                                  (87.51%)
+    19,348,704,861      instructions                     #    4.25  insn per cycle              (87.52%)
+     4,344,529,671      L1-dcache-loads                                                         (87.73%)
+        14,810,375      L1-dcache-load-misses            #    0.34% of all L1-dcache accesses   (87.66%)
+                 0      LLC-loads                                                               (87.39%)
+       318,932,489      LLC-load-misses                                                         (87.52%)
+     2,514,538,100      branch-instructions                                                     (87.42%)
+         1,092,308      branch-misses                    #    0.04% of all branches             (74.81%)
+
+       0.314912256 seconds time elapsed
+
+       1.801417000 seconds user
+       0.048526000 seconds sys
+
+

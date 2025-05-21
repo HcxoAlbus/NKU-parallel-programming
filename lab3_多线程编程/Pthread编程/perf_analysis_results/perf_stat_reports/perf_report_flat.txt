@@ -1,0 +1,20 @@
+# started on Wed May 21 19:02:38 2025
+
+
+ Performance counter stats for './main ./ --method flat':
+
+    36,222,826,939      cycles                                                                  (87.42%)
+   118,633,536,140      instructions                     #    3.28  insn per cycle              (87.53%)
+    39,156,515,189      L1-dcache-loads                                                         (87.52%)
+        13,516,734      L1-dcache-load-misses            #    0.03% of all L1-dcache accesses   (87.49%)
+                 0      LLC-loads                                                               (87.56%)
+     1,212,517,165      LLC-load-misses                                                         (87.46%)
+    20,083,582,926      branch-instructions                                                     (87.51%)
+         2,037,801      branch-misses                    #    0.01% of all branches             (74.94%)
+
+       2.017574444 seconds time elapsed
+
+      14.626355000 seconds user
+       0.242485000 seconds sys
+
+

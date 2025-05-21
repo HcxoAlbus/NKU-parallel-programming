@@ -1,0 +1,24 @@
+Using data root path: ./
+Running specific method: ivfadc
+  with nprobe=2
+  with ivf_clusters=64
+  with pq_nsub=4
+  with rerank_k=600
+将测试前 2000 条查询。
+
+--- IVFADC (IVF+PQ, Pthread) 测试 ---
+构建 IVFADC 索引... IVF_clusters=64, PQ_nsub=4, pthreads=8, ivf_kmeans_iter=20
+IVFPQ: Building IVF part (L2-based)... (clusters=64, iters=20)
+IVFPQ: IVF part built.
+IVFPQ: Building PQ part (L2-based)...
+PQ Training using all 100000 base vectors...
+PQ Training finished in 11460 ms.
+PQ Encoding nbase=100000 vectors...
+PQ Encoding finished in 64 ms.
+IVFPQ: PQ part built and data encoded by ProductQuantizer.
+IVFADC 索引构建时间: 11855.3 ms
+测试 IVFADC (Pthread) 使用 nprobe = 2, rerank_k = 600
+=== IVFADC (nprobe=2, IVFclus=64, PQnsub=4, rerank_k=600) ===
+平均召回率: 0.76445
+平均延迟 (us): 557.376
+

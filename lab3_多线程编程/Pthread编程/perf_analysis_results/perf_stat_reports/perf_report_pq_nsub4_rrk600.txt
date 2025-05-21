@@ -1,0 +1,20 @@
+# started on Wed May 21 19:02:45 2025
+
+
+ Performance counter stats for './main ./ --method pq --nsub 4 --rerank_k 600':
+
+   142,708,999,205      cycles                                                                  (87.50%)
+   629,715,876,535      instructions                     #    4.41  insn per cycle              (87.41%)
+   134,892,647,331      L1-dcache-loads                                                         (87.52%)
+        68,310,337      L1-dcache-load-misses            #    0.05% of all L1-dcache accesses   (87.58%)
+                 0      LLC-loads                                                               (87.50%)
+       174,848,167      LLC-load-misses                                                         (87.40%)
+   106,801,192,125      branch-instructions                                                     (87.51%)
+       289,432,671      branch-misses                    #    0.27% of all branches             (75.08%)
+
+      13.578400028 seconds time elapsed
+
+      55.138070000 seconds user
+       0.070966000 seconds sys
+
+

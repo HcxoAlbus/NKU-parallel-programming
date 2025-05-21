@@ -1,0 +1,7 @@
+Using data root path: ./
+Running specific method: sq
+将测试前 2000 条查询。
+=== SQ Search (标量量化) ===
+平均召回率: 0.92055
+平均延迟 (us): 732.078
+

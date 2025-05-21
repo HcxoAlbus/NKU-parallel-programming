@@ -1,0 +1,20 @@
+# started on Wed May 21 19:06:22 2025
+
+
+ Performance counter stats for './main ./ --method ivfadc --nprobe 16 --ivf_clusters 64 --pq_nsub 4 --rerank_k 600':
+
+   157,323,444,262      cycles                                                                  (88.52%)
+   646,860,166,940      instructions                     #    4.11  insn per cycle              (88.30%)
+   142,474,865,897      L1-dcache-loads                                                         (88.29%)
+       195,130,244      L1-dcache-load-misses            #    0.14% of all L1-dcache accesses   (88.28%)
+                 0      LLC-loads                                                               (88.37%)
+       399,779,184      LLC-load-misses                                                         (88.26%)
+   109,677,193,276      branch-instructions                                                     (88.22%)
+       438,739,817      branch-misses                    #    0.40% of all branches             (76.49%)
+
+      18.092886981 seconds time elapsed
+
+      55.306389000 seconds user
+       6.760546000 seconds sys
+
+

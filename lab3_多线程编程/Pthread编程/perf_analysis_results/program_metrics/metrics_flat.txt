@@ -1,0 +1,7 @@
+Using data root path: ./
+Running specific method: flat
+将测试前 2000 条查询。
+=== Flat Search (暴力搜索) ===
+平均召回率: 0.99995
+平均延迟 (us): 6687.627
+

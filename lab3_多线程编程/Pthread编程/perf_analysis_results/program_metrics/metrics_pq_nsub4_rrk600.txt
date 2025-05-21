@@ -1,0 +1,13 @@
+Using data root path: ./
+Running specific method: pq
+  with rerank_k=600
+将测试前 2000 条查询。
+PQ Training using all 100000 base vectors...
+PQ Training finished in 11720 ms.
+PQ Encoding nbase=100000 vectors...
+PQ Encoding finished in 65 ms.
+使用 PQ 参数: nsub=4, train_ratio=1, rerank_k=600
+=== PQ Search (乘积量化, nsub=4, rerank=600) ===
+平均召回率: 0.90310
+平均延迟 (us): 700.687
+

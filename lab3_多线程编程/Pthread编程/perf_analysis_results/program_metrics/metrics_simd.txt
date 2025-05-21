@@ -1,0 +1,7 @@
+Using data root path: ./
+Running specific method: simd
+将测试前 2000 条查询。
+=== SIMD Search (SIMD优化) ===
+平均召回率: 0.99995
+平均延迟 (us): 1961.937
+

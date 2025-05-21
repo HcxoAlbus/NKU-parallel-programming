@@ -1,0 +1,20 @@
+# started on Wed May 21 19:03:13 2025
+
+
+ Performance counter stats for './main ./ --method ivf --nprobe 1 --clusters 256':
+
+    33,539,010,283      cycles                                                                  (89.33%)
+   104,268,464,454      instructions                     #    3.11  insn per cycle              (89.09%)
+    29,151,319,952      L1-dcache-loads                                                         (89.09%)
+       151,250,780      L1-dcache-load-misses            #    0.52% of all L1-dcache accesses   (88.99%)
+                 0      LLC-loads                                                               (89.13%)
+       265,882,154      LLC-load-misses                                                         (88.85%)
+     9,644,970,552      branch-instructions                                                     (88.81%)
+        23,202,207      branch-misses                    #    0.24% of all branches             (77.53%)
+
+       5.350659007 seconds time elapsed
+
+      11.476367000 seconds user
+       3.256138000 seconds sys
+
+

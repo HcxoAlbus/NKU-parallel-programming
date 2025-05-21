@@ -1,0 +1,14 @@
+Using data root path: ./
+Running specific method: ivf
+  with nprobe=8
+  with clusters=256
+将测试前 2000 条查询。
+
+--- IVF (Pthread) 测试 ---
+构建 IVF 索引... num_clusters=256, pthreads=8, kmeans_iter=20
+IVF 索引构建时间: 2151.66 ms
+测试 IVF (Pthread) 使用 nprobe = 8
+=== IVF (Pthread, nprobe=8, clusters=256) ===
+平均召回率: 0.92835
+平均延迟 (us): 566.310
+
