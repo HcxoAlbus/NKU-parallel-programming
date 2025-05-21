@@ -25,10 +25,10 @@ class IVFPQIndexV1;
 
 struct IVFPQV1_KMeansAssignArgs {
     IVFPQIndexV1* ivfpq_instance;
-    const float* all_reconstructed_data_ptr; // Points to PQ-reconstructed data for IVF training
+    const float* all_reconstructed_data_ptr; // Now points to original base data for IVF training
     size_t start_idx_data;    
     size_t end_idx_data;      
-    const std::vector<float>* current_ivf_centroids_ptr; // Centroids are also based on reconstructed data
+    const std::vector<float>* current_ivf_centroids_ptr; // Centroids are trained on original data
     std::vector<int>* assignments_output_ptr;    // Stores original data indices' assignments
     std::vector<float>* local_sum_vectors_ptr;    
     std::vector<int>* local_counts_ptr;        
@@ -63,10 +63,10 @@ private:
     size_t num_threads;
     int ivf_kmeans_iterations;
 
-    std::vector<float> ivf_centroids_data; // Centroids for IVF, trained on PQ-reconstructed data
+    std::vector<float> ivf_centroids_data; // Centroids for IVF, trained on original base data
     std::vector<std::vector<uint32_t>> ivf_inverted_lists_data; // Stores original data indices
 
-    // IVF uses L2 distance. For V1, this is on reconstructed vectors.
+    // IVF uses L2 distance. For V1, this is on original vectors.
     float compute_distance_ivf(const float* v1, const float* v2, size_t dim) const {
         return compute_l2_sq_neon(v1, v2, dim);
     }
@@ -85,8 +85,8 @@ private:
 
         for (size_t i = data->start_idx_data; i < data->end_idx_data; ++i) {
             // 'i' is the original index of the data point.
-            // We fetch its reconstructed version for IVF clustering.
-            const float* point = data->all_reconstructed_data_ptr + i * self->vecdim;
+            // We use the original data point for IVF clustering.
+            const float* point = data->all_reconstructed_data_ptr + i * self->vecdim; // This now points to original data
             float min_dist = std::numeric_limits<float>::max();
             int best_cluster = -1;
 
@@ -152,7 +152,7 @@ private:
             for (uint32_t point_orig_idx : point_indices_in_cluster) {
                 const uint8_t* item_code = pq->get_code_for_item(point_orig_idx); // Get PQ code for original item
                 if (item_code) {
-                    float dist_pq = pq->compute_distance_from_table_and_code(*query_dist_table, item_code);
+                    float dist_pq = pq->compute_asymmetric_distance_sq_with_table(item_code, *query_dist_table);
                     if (data->thread_top_k_output_ptr->size() < data->k_to_collect || dist_pq < data->thread_top_k_output_ptr->top().first) {
                         if (data->thread_top_k_output_ptr->size() == data->k_to_collect) {
                             data->thread_top_k_output_ptr->pop();
@@ -206,11 +206,9 @@ public:
         }
         std::cout << "IVFPQ_V1: PQ part built and all base data encoded by ProductQuantizer." << std::endl;
 
-        // 2. Build IVF part on PQ-reconstructed data
+        // 2. Build IVF part on original base data
         if (num_ivf_clusters == 0) {
             std::cout << "IVFPQ_V1: num_ivf_clusters is 0, skipping IVF part construction." << std::endl;
-            // Inverted lists will remain empty, search will degrade to full PQ scan if nprobe is not handled.
-            // Or, more correctly, search should detect this and behave accordingly.
             return;
         }
         if (num_all_base_data < num_ivf_clusters) {
@@ -218,20 +216,7 @@ public:
                        << ") is less than num_ivf_clusters (" << num_ivf_clusters << ")." << std::endl;
         }
 
-        std::cout << "IVFPQ_V1: Reconstructing base data from PQ codes for IVF training..." << std::endl;
-        std::vector<float> reconstructed_base_for_ivf(num_all_base_data * vecdim);
-        for (size_t i = 0; i < num_all_base_data; ++i) {
-            const uint8_t* code = pq_quantizer->get_code_for_item(i);
-            if (code) {
-                pq_quantizer->decode(code, reconstructed_base_for_ivf.data() + i * vecdim);
-            } else {
-                // This should not happen if PQ was built correctly for all items
-                std::cerr << "IVFPQ_V1: Warning - could not get PQ code for item " << i << " during reconstruction." << std::endl;
-                // Fill with zeros or some other placeholder if needed, or handle error
-                memset(reconstructed_base_for_ivf.data() + i * vecdim, 0, vecdim * sizeof(float));
-            }
-        }
-        std::cout << "IVFPQ_V1: Base data reconstructed. Building IVF part (L2-based on reconstructed data)..."
+        std::cout << "IVFPQ_V1: Building IVF part (L2-based on original data)..."
                   << " (clusters=" << num_ivf_clusters << ", iters=" << ivf_kmeans_iterations << ")" << std::endl;
 
         ivf_centroids_data.assign(num_ivf_clusters * vecdim, 0.0f);
@@ -243,9 +228,9 @@ public:
 
         size_t num_initial_centroids_to_pick = std::min(num_all_base_data, num_ivf_clusters);
         for(size_t i=0; i<num_initial_centroids_to_pick; ++i) {
-            // Initialize IVF centroids from the reconstructed data
+            // Initialize IVF centroids from the original base data
             memcpy(ivf_centroids_data.data() + i * vecdim, 
-                   reconstructed_base_for_ivf.data() + initial_centroid_indices[i] * vecdim, 
+                   all_base_data + initial_centroid_indices[i] * vecdim, 
                    vecdim * sizeof(float));
         }
 
@@ -268,7 +253,7 @@ public:
 
             for(size_t t=0; t < num_threads; ++t) {
                 kmeans_args[t].ivfpq_instance = this;
-                kmeans_args[t].all_reconstructed_data_ptr = reconstructed_base_for_ivf.data();
+                kmeans_args[t].all_reconstructed_data_ptr = all_base_data; // Use original data
                 kmeans_args[t].start_idx_data = current_data_start_idx;
                 size_t chunk_size = data_per_thread + (t < data_remainder ? 1 : 0);
                 kmeans_args[t].end_idx_data = current_data_start_idx + chunk_size;
@@ -333,7 +318,7 @@ public:
                 ivf_inverted_lists_data[assignments[i]].push_back(static_cast<uint32_t>(i));
              }
         }
-        std::cout << "IVFPQ_V1: IVF part built on reconstructed data." << std::endl;
+        std::cout << "IVFPQ_V1: IVF part built on original data." << std::endl;
     }
 
 
@@ -362,10 +347,10 @@ public:
                  std::cerr << "IVFPQ_V1 search: Failed to compute PQ distance table for full scan." << std::endl;
                  return final_results_heap;
             }
-            for (uint32_t i = 0; i < pq_quantizer->get_num_encoded_items(); ++i) {
+            for (uint32_t i = 0; i < pq_quantizer->get_nbase(); ++i) { // Changed to get_nbase()
                 const uint8_t* code = pq_quantizer->get_code_for_item(i);
                 if (code) {
-                    float dist = pq_quantizer->compute_distance_from_table_and_code(query_pq_dist_table, code);
+                    float dist = pq_quantizer->compute_asymmetric_distance_sq_with_table(code, query_pq_dist_table);
                      if (final_results_heap.size() < k || dist < final_results_heap.top().first) {
                         if (final_results_heap.size() == k) final_results_heap.pop();
                         final_results_heap.push({dist, i});
@@ -516,7 +501,7 @@ public:
             }
             // pq_candidates_vec is sorted by L2 dist (descending). We need ascending for std::sort.
             std::sort(pq_candidates_vec.begin(), pq_candidates_vec.end(), 
-                      [](const auto&a, const auto&b){ return a.first < b.first; });
+                      [](const std::pair<float, uint32_t>&a, const std::pair<float, uint32_t>&b){ return a.first < b.first; });
 
 
             for(const auto& pq_cand_pair : pq_candidates_vec){

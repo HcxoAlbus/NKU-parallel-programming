@@ -15,12 +15,15 @@
 #include "pq_anns.h" 
 #include "sq_anns.h"
 #include "ivf_anns.h" // Include the new IVF header
+#include "ivf_openmp.h" // Include the new IVF OpenMP header
+
 #include <functional>
 #include <algorithm> 
 #include <queue>     
 #include <stdexcept> 
 
 #include "ivf_pq_anns.h" // Include the new IVF-PQ header
+#include "ivf_pq_v1_anns.h" // Include the new IVF-PQ V1 header
 // --- 函数声明  ---
 std::priority_queue<std::pair<float, uint32_t>> flat_search(float* base, const float* query, size_t base_number, size_t vecdim, size_t k);
 std::priority_queue<std::pair<float, uint32_t>> simd_search(float* base, const float* query, size_t base_number, size_t vecdim, size_t k);
@@ -443,6 +446,76 @@ int main(int argc, char *argv[])
         std::cerr << "跳过 IVF (Pthread) 搜索测试，因为索引创建失败。" << std::endl;
     }
 
+    // --- IVF Search (OpenMP) ---
+    std::cout << "\n--- IVF (OpenMP) 测试 ---" << std::endl;
+    size_t num_ivf_clusters_omp = num_ivf_clusters_ivf_only; // Reuse config from Pthread for comparison
+    int ivf_kmeans_iterations_omp = ivf_kmeans_iterations_ivf_only;
+
+    IVFIndexOpenMP* ivf_omp_index_ptr = nullptr;
+    if (base_number > 0 && num_ivf_clusters_omp > 0 && vecdim > 0) {
+        std::cout << "构建 IVF (OpenMP) 索引... num_clusters=" << num_ivf_clusters_omp
+                  << ", threads=" << num_pthreads_for_ann // Using the same thread count variable
+                  << ", kmeans_iter=" << ivf_kmeans_iterations_omp << std::endl;
+        struct timeval build_start_omp, build_end_omp;
+        gettimeofday(&build_start_omp, NULL);
+        try {
+            ivf_omp_index_ptr = new IVFIndexOpenMP(base, base_number, vecdim, num_ivf_clusters_omp, num_pthreads_for_ann, ivf_kmeans_iterations_omp);
+        } catch (const std::exception& e) {
+            std::cerr << "Error creating IVF (OpenMP) index: " << e.what() << std::endl;
+            ivf_omp_index_ptr = nullptr;
+        }
+        gettimeofday(&build_end_omp, NULL);
+        if (ivf_omp_index_ptr) {
+            long long build_time_us_omp = (build_end_omp.tv_sec - build_start_omp.tv_sec) * 1000000LL + (build_end_omp.tv_usec - build_start_omp.tv_usec);
+            std::cout << "IVF (OpenMP) 索引构建时间: " << build_time_us_omp / 1000.0 << " ms" << std::endl;
+        }
+    } else {
+        std::cerr << "无法构建 IVF (OpenMP) 索引，参数无效 (base_number=" << base_number
+                  << ", vecdim=" << vecdim << ", num_ivf_clusters_omp=" << num_ivf_clusters_omp << ")." << std::endl;
+    }
+
+    if (ivf_omp_index_ptr) {
+        std::vector<size_t> nprobe_values_omp = {1, 2, 4, 8, 16, 32}; // Initialize nprobe_values_omp directly
+        if (num_ivf_clusters_omp < 32 && num_ivf_clusters_omp > 0) { // Adjust if different cluster count
+            nprobe_values_omp.clear();
+            for(size_t np_val = 1; np_val <= num_ivf_clusters_omp; np_val *=2) nprobe_values_omp.push_back(np_val);
+            if (nprobe_values_omp.empty() || nprobe_values_omp.back() < num_ivf_clusters_omp) {
+                 bool contains_max = false;
+                 for(size_t val : nprobe_values_omp) if(val == num_ivf_clusters_omp) contains_max = true;
+                 if(!contains_max && num_ivf_clusters_omp > 0) nprobe_values_omp.push_back(num_ivf_clusters_omp);
+            }
+            if (nprobe_values_omp.empty() && num_ivf_clusters_omp > 0) nprobe_values_omp.push_back(1);
+            else if (num_ivf_clusters_omp == 0) nprobe_values_omp.clear();
+        } else if (num_ivf_clusters_omp == 0) {
+            nprobe_values_omp.clear();
+        }
+
+
+        for (size_t current_nprobe : nprobe_values_omp) {
+            if (current_nprobe == 0 && num_ivf_clusters_omp > 0) continue;
+            size_t actual_nprobe = (num_ivf_clusters_omp == 0) ? 0 : std::min(current_nprobe, num_ivf_clusters_omp);
+            if (actual_nprobe == 0 && num_ivf_clusters_omp > 0) actual_nprobe = 1;
+            else if (num_ivf_clusters_omp == 0) continue;
+
+
+            std::cout << "测试 IVF (OpenMP) 使用 nprobe = " << actual_nprobe << std::endl;
+            auto ivf_omp_search_lambda = [&](const float* q, size_t k_param) {
+                return ivf_omp_index_ptr->search(q, k_param, actual_nprobe);
+            };
+            // Set use_omp_parallel to false because IVFIndexOpenMP handles its own parallelism.
+            std::vector<SearchResult> results_ivf_omp = benchmark_search(
+               ivf_omp_search_lambda,
+               test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k, false); 
+            
+            std::string ivf_omp_method_name = "IVF (OpenMP, nprobe=" + std::to_string(actual_nprobe) + 
+                                          ", clusters=" + std::to_string(num_ivf_clusters_omp) + ")";
+            print_results(ivf_omp_method_name, results_ivf_omp, num_queries_to_test);
+        }
+    } else {
+        std::cerr << "跳过 IVF (OpenMP) 搜索测试，因为索引创建失败。" << std::endl;
+    }
+
+
     // --- IVF + PQ Search (Pthread) ---
     std::cout << "\n--- IVFADC (IVF+PQ, Pthread) 测试 ---" << std::endl;
     size_t num_ivf_clusters_ivfpq = 64; // Fewer clusters for IVFADC typically, as PQ handles fine-grain
@@ -507,7 +580,7 @@ int main(int argc, char *argv[])
             nprobe_values_ivfpq.clear();
         }
 
-        size_t ivfpq_rerank_k = 600;
+        size_t ivfpq_rerank_k_global = 600;
         for (size_t current_nprobe : nprobe_values_ivfpq) {
             if (current_nprobe == 0) continue;
             size_t actual_nprobe = std::min(current_nprobe, num_ivf_clusters_ivfpq);
@@ -515,13 +588,13 @@ int main(int argc, char *argv[])
             else if (num_ivf_clusters_ivfpq == 0) continue;
 
 
-            std::cout << "测试 IVFADC (Pthread) 使用 nprobe = " << actual_nprobe << ", rerank_k = " << ivfpq_rerank_k << std::endl;
+            std::cout << "测试 IVFADC (，第二种，Pthread) 使用 nprobe = " << actual_nprobe << ", rerank_k = " << ivfpq_rerank_k_global << std::endl;
             auto ivfpq_search_lambda = [&](const float* q, size_t k_param) {
                 return ivfpq_index_ptr->search(q,          // query
                                                base,       // base_data_for_reranking
                                                k_param,    // k
                                                actual_nprobe, // nprobe
-                                               ivfpq_rerank_k); // rerank_k_candidates
+                                               ivfpq_rerank_k_global); // rerank_k_candidates
             };
             std::vector<SearchResult> results_ivfpq = benchmark_search(
                ivfpq_search_lambda,
@@ -530,13 +603,113 @@ int main(int argc, char *argv[])
             std::string ivfpq_method_name = "IVFADC (nprobe=" + std::to_string(actual_nprobe) +
                                             ", IVFclus=" + std::to_string(num_ivf_clusters_ivfpq) +
                                             ", PQnsub=" + std::to_string(pq_nsub_ivfpq) +
-                                            ", rerank_k=" + std::to_string(ivfpq_rerank_k) + ")";
+                                            ", rerank_k=" + std::to_string(ivfpq_rerank_k_global) + ")";
             print_results(ivfpq_method_name, results_ivfpq, num_queries_to_test);
         }
     } else {
         std::cerr << "跳过 IVFADC (Pthread) 搜索测试，因为索引创建失败。" << std::endl;
     }
 
+
+    // --- IVF + PQ Search (Pthread, Method 1: PQ first, then IVF on reconstructed) ---
+    std::cout << "\n--- IVFADC (IVF+PQ, Pthread, Method 1: PQ then IVF) 测试 ---" << std::endl;
+    size_t num_ivf_clusters_ivfpq_v1 = 64; // Can be tuned, e.g. same as other IVFPQ
+    if (base_number > 0 && num_ivf_clusters_ivfpq_v1 > base_number / 10) {
+        num_ivf_clusters_ivfpq_v1 = std::max((size_t)16, base_number / 100);
+    }
+    if (num_ivf_clusters_ivfpq_v1 == 0 && base_number > 0) num_ivf_clusters_ivfpq_v1 = std::min((size_t)1, base_number);
+    
+    size_t pq_nsub_ivfpq_v1 = pq_nsub_global; 
+    double pq_train_ratio_ivfpq_v1 = pq_train_ratio_global;
+    int ivf_kmeans_iter_ivfpq_v1 = 20;
+
+    IVFPQIndexV1* ivfpq_v1_index_ptr = nullptr;
+    if (base_number > 0 && vecdim > 0 && /*num_ivf_clusters_ivfpq_v1 > 0 &&*/ pq_nsub_ivfpq_v1 > 0 && vecdim % pq_nsub_ivfpq_v1 == 0) {
+        std::cout << "构建 IVFADC (Method 1) 索引... IVF_clusters=" << num_ivf_clusters_ivfpq_v1
+                  << ", PQ_nsub=" << pq_nsub_ivfpq_v1
+                  << ", pthreads=" << num_pthreads_for_ann
+                  << ", ivf_kmeans_iter=" << ivf_kmeans_iter_ivfpq_v1 << std::endl;
+        struct timeval build_start_ivfpq_v1, build_end_ivfpq_v1;
+        gettimeofday(&build_start_ivfpq_v1, NULL);
+        try {
+            ivfpq_v1_index_ptr = new IVFPQIndexV1(vecdim,
+                                                 num_ivf_clusters_ivfpq_v1,
+                                                 pq_nsub_ivfpq_v1,
+                                                 num_pthreads_for_ann,
+                                                 ivf_kmeans_iter_ivfpq_v1);
+            ivfpq_v1_index_ptr->build(base, base_number, pq_train_ratio_ivfpq_v1);
+
+        } catch (const std::exception& e) {
+            std::cerr << "Error creating or building IVFPQ (Method 1) index: " << e.what() << std::endl;
+            delete ivfpq_v1_index_ptr; // Ensure cleanup if build fails partially after construction
+            ivfpq_v1_index_ptr = nullptr;
+        }
+        gettimeofday(&build_end_ivfpq_v1, NULL);
+        if (ivfpq_v1_index_ptr) { 
+            long long build_time_us_ivfpq_v1 = (build_end_ivfpq_v1.tv_sec - build_start_ivfpq_v1.tv_sec) * 1000000LL +
+                                           (build_end_ivfpq_v1.tv_usec - build_start_ivfpq_v1.tv_usec);
+            std::cout << "IVFADC (Method 1) 索引构建时间: " << build_time_us_ivfpq_v1 / 1000.0 << " ms" << std::endl;
+        }
+    } else {
+         std::cerr << "无法构建 IVFADC (Method 1) 索引，参数无效 (base_number="<<base_number
+                   <<", vecdim="<<vecdim<<", ivf_clusters="<<num_ivf_clusters_ivfpq_v1
+                   <<", pq_nsub="<<pq_nsub_ivfpq_v1 <<")." << std::endl;
+    }
+
+    if (ivfpq_v1_index_ptr) {
+        std::vector<size_t> nprobe_values_ivfpq_v1 = {1, 2, 4, 8, 16};
+        if (num_ivf_clusters_ivfpq_v1 > 0 && num_ivf_clusters_ivfpq_v1 < 16 ) {
+            nprobe_values_ivfpq_v1.clear();
+            for(size_t np_val = 1; np_val <= num_ivf_clusters_ivfpq_v1; np_val *=2) {
+                nprobe_values_ivfpq_v1.push_back(np_val);
+            }
+            if (nprobe_values_ivfpq_v1.empty() && num_ivf_clusters_ivfpq_v1 > 0) nprobe_values_ivfpq_v1.push_back(1); // Ensure at least one nprobe if clusters > 0
+            else if (num_ivf_clusters_ivfpq_v1 == 0) nprobe_values_ivfpq_v1.clear(); // No nprobes if no clusters
+        } else if (num_ivf_clusters_ivfpq_v1 == 0) {
+             nprobe_values_ivfpq_v1.clear(); // No nprobes if no clusters
+        }
+
+
+        size_t ivfpq_v1_rerank_k = pq_rerank_k_global; // Use same rerank_k for comparison
+        for (size_t current_nprobe : nprobe_values_ivfpq_v1) {
+            if (current_nprobe == 0 && num_ivf_clusters_ivfpq_v1 > 0) continue; // Skip nprobe=0 if IVF is active
+            size_t actual_nprobe = (num_ivf_clusters_ivfpq_v1 == 0) ? 0 : std::min(current_nprobe, num_ivf_clusters_ivfpq_v1);
+             if (actual_nprobe == 0 && num_ivf_clusters_ivfpq_v1 > 0) actual_nprobe = 1; // Default to 1 if IVF active and current_nprobe was 0
+             else if (num_ivf_clusters_ivfpq_v1 == 0) actual_nprobe = 0; // Ensure nprobe is 0 if no clusters
+
+
+            std::cout << "测试 IVFADC (Method 1, Pthread) 使用 nprobe = " << actual_nprobe << ", rerank_k = " << ivfpq_v1_rerank_k << std::endl;
+            auto ivfpq_v1_search_lambda = [&](const float* q, size_t k_param) {
+                return ivfpq_v1_index_ptr->search(q, base, k_param, actual_nprobe, ivfpq_v1_rerank_k);
+            };
+            std::vector<SearchResult> results_ivfpq_v1 = benchmark_search(
+               ivfpq_v1_search_lambda,
+               test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k, false); // false for pthreads
+            
+            std::string ivfpq_v1_method_name = "IVFADC (M1, Pthread, nprobe=" + std::to_string(actual_nprobe) + 
+                                          ", clusters=" + std::to_string(num_ivf_clusters_ivfpq_v1) + 
+                                          ", rerank_k=" + std::to_string(ivfpq_v1_rerank_k) + ")";
+            print_results(ivfpq_v1_method_name, results_ivfpq_v1, num_queries_to_test);
+        }
+         // Special case: test with nprobe=0 if IVF part was skipped (num_ivf_clusters_ivfpq_v1 == 0)
+        if (num_ivf_clusters_ivfpq_v1 == 0) {
+            std::cout << "测试 IVFADC (Method 1, Pthread) 使用 nprobe = 0 (Full PQ Scan as IVF is inactive)" 
+                      << ", rerank_k = " << ivfpq_v1_rerank_k << std::endl;
+            auto ivfpq_v1_search_lambda_full_scan = [&](const float* q, size_t k_param) {
+                return ivfpq_v1_index_ptr->search(q, base, k_param, 0, ivfpq_v1_rerank_k);
+            };
+            std::vector<SearchResult> results_ivfpq_v1_full_scan = benchmark_search(
+               ivfpq_v1_search_lambda_full_scan,
+               test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k, false);
+            
+            std::string ivfpq_v1_method_name_fs = std::string("IVFADC (M1, Pthread, nprobe=0, Full PQ Scan") + 
+                                                  ", rerank_k=" + std::to_string(ivfpq_v1_rerank_k) + ")";
+            print_results(ivfpq_v1_method_name_fs, results_ivfpq_v1_full_scan, num_queries_to_test);
+        }
+
+    } else {
+        std::cerr << "跳过 IVFADC (Method 1, Pthread) 搜索测试，因为索引创建失败。" << std::endl;
+    }
 
     // --- 打印结果 ---
     // ... (Print results for Flat, SIMD, PQ, SQ, IVF-only) ...
@@ -564,7 +737,8 @@ int main(int argc, char *argv[])
     delete pq_index_ptr; 
     delete sq_quantizer_ptr;
     delete ivf_index_ptr;
+    delete ivf_omp_index_ptr; // Cleanup new OpenMP IVF index
     delete ivfpq_index_ptr; // Cleanup new index
-
+    delete ivfpq_v1_index_ptr; // Cleanup new index
     return 0;
 }
