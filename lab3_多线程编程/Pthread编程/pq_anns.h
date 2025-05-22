@@ -311,19 +311,6 @@ private:
     }
 
     void ensure_query_distance_table(const float* query) const {
-        // This check isn't perfect for identifying if the table is for the *current* query
-        // A more robust way would be to pass the query pointer and check if it changed.
-        // For simplicity, we assume if it's valid, it's for the current query context.
-        // In a multi-threaded search scenario, each thread might need its own table or careful synchronization.
-        // For IVFPQ, the search_lists_pq_worker_static might call this.
-        // If multiple threads call this for the SAME query, it's redundant but safe due to const.
-        // If different queries, then this cache is problematic.
-        // Let's make it non-mutable and compute it directly in compute_asymmetric_distance_sq
-        // Or, the caller (worker thread) computes its own distance table.
-
-        // For IVFPQ, each worker thread will compute its own distance table for the query.
-        // So, query_distance_table_cache and query_distance_table_valid are removed from class members.
-        // Instead, compute_asymmetric_distance_sq will take a precomputed table or compute it.
     }
 
 public:
@@ -334,7 +321,7 @@ public:
           dsub( (nsub_ == 0 || vecdim_ % nsub_ != 0) ? 0 : vecdim_ / nsub_ ), // Basic validation
           ksub(256), // Typically 2^8
           nbase(nbase_)
-          // query_distance_table_valid(false) // Removed
+
     {
         if (dsub == 0 && vecdim > 0 && nsub > 0) { // vecdim not divisible by nsub
              throw std::invalid_argument("ProductQuantizer: vecdim must be divisible by nsub.");
@@ -342,8 +329,8 @@ public:
         if (vecdim == 0 || nsub == 0) {
              throw std::invalid_argument("ProductQuantizer: vecdim and nsub must be greater than zero.");
         }
-        // ... rest of the constructor (train, encode) ...
-// ... existing constructor ...
+
+
         // --- 训练 ---
         size_t ntrain = static_cast<size_t>(static_cast<double>(nbase) * train_ratio);
         ntrain = std::max(static_cast<size_t>(ksub * 39), std::min(nbase, ntrain)); 
@@ -352,8 +339,7 @@ public:
         if (ntrain == 0 && nbase > 0) ntrain = nbase; // If calculated ntrain is 0 but base exists, train on all
         if (ntrain == 0 && nbase == 0) {
             std::cout << "PQ Training: No base data to train on." << std::endl;
-            // flat_centroids and flat_codes will be empty.
-            // search will return empty.
+
             return; // Exit constructor early if no data
         }
 
@@ -402,8 +388,7 @@ public:
         }
     }
 
-    // Method to precompute distance table for a query
-    // The table stores || query_sub - centroid[sub][code] ||^2
+
     void compute_query_distance_table(const float* query, std::vector<float>& table_output) const {
         if (flat_centroids.empty()) return; // No centroids to compute against
         table_output.resize(nsub * ksub);
@@ -487,7 +472,6 @@ public:
         bool perform_reranking = (rerank_k > k && base_data != nullptr);
 
         if (!perform_reranking) {
-            // ...existing code...
             return pq_heap;
         } else {
             // Reranking
@@ -511,8 +495,7 @@ public:
                     final_results_heap.push({exact_dist_sq, idx});
                 }
             }
-            // final_results_heap now contains the k best items according to exact L2 distance,
-            // and is in the max-heap format benchmark_search expects.
+
             return final_results_heap;
         }
     }

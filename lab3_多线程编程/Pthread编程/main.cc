@@ -26,7 +26,7 @@
 #include "ivf_pq_v1_anns.h" // 包含新的 IVF-PQ V1 头文件
 #include "ivf_pq_openmp_anns.h" // <<< 新增: 包含 OpenMP 版本的 IVF+PQ 头文件
 // --- 函数声明  ---
-std::priority_queue<std::pair<float, uint32_t>> flat_search(float* base, const float* query, size_t base_number, size_t vecdim, size_t k);
+std::priority_queue<std::pair<float, uint32_t>> flat_search(float* base, float* query, size_t base_number, size_t vecdim, size_t k);
 std::priority_queue<std::pair<float, uint32_t>> simd_search(float* base, const float* query, size_t base_number, size_t vecdim, size_t k);
 // ---
 template<typename T>
@@ -34,41 +34,16 @@ T *LoadData(std::string data_path, size_t& n_out, size_t& d_out) // 重命名以
 {
     std::ifstream fin;
     fin.open(data_path, std::ios::in | std::ios::binary);
-    if (!fin.is_open()) {
-        std::cerr << "打开数据文件时出错: " << data_path << std::endl;
-        exit(1); // 或者抛出 std::runtime_error 以进行更好的错误处理
-    }
-
     uint32_t n_file, d_file; // 使用固定大小的类型读取文件元数据
 
     fin.read(reinterpret_cast<char*>(&n_file), sizeof(uint32_t));
-    if (!fin) {
-        std::cerr << "从数据文件读取 'n' 时出错: " << data_path << std::endl;
-        fin.close();
-        exit(1);
-    }
+    
     fin.read(reinterpret_cast<char*>(&d_file), sizeof(uint32_t));
-    if (!fin) {
-        std::cerr << "从数据文件读取 'd' 时出错: " << data_path << std::endl;
-        fin.close();
-        exit(1);
-    }
 
     n_out = static_cast<size_t>(n_file);
     d_out = static_cast<size_t>(d_file);
 
-    if (n_out == 0 || d_out == 0) {
-        std::cerr << "警告: " << data_path << " 的 n 或 d 为零。n=" << n_out << ", d=" << d_out << std::endl;
-        // 分配一个零大小的数组或返回 nullptr，确保下游代码处理它。
-        // new T[0] 在 C++ 中是有效的。
-    }
     
-    // 在乘法计算分配大小之前检查潜在的溢出
-    if (n_out > 0 && d_out > 0 && (n_out > std::numeric_limits<size_t>::max() / d_out) ) {
-        std::cerr << "错误: " << data_path << " 的 n*d 将导致 size_t 溢出。n=" << n_out << ", d=" << d_out << std::endl;
-        fin.close();
-        exit(1); // 或者抛出 std::overflow_error
-    }
 
     T* data = nullptr;
     try {
@@ -145,7 +120,7 @@ std::vector<SearchResult> benchmark_search(
         struct timeval val;
         gettimeofday(&val, NULL);
 
-        const float* current_query = test_query + static_cast<size_t>(i) * vecdim;
+        float* current_query = test_query + static_cast<size_t>(i) * vecdim;
         // 调用传入的 lambda 或函数对象
         auto res_heap = search_func(current_query, k);
 
@@ -221,7 +196,7 @@ int main(int argc, char *argv[])
     size_t test_number = 0, base_number = 0;
     size_t test_gt_d = 0, vecdim = 0;
     
-    std::string data_root_path = "./"; 
+    std::string data_root_path = "/anndata/"; 
     if (argc > 1) { 
         data_root_path = std::string(argv[1]);
         if (data_root_path.back() != '/') {
@@ -240,11 +215,6 @@ int main(int argc, char *argv[])
     size_t gt_n_from_file; 
     auto test_gt = LoadData<int>(gt_path, gt_n_from_file, test_gt_d); 
 
-    if (gt_n_from_file != test_number && test_number != 0) { 
-         std::cout << "警告: 查询数量 (" << test_number 
-                   << ") 和 GT 数量 (" << gt_n_from_file 
-                   << ") 不匹配。使用查询数量作为测试计数。" << std::endl;
-    }
      // 如果 test_number 被查询加载更新，确保 gt_n_from_file 也被考虑用于 num_queries_to_test
     if (test_number == 0 && gt_n_from_file > 0) test_number = gt_n_from_file; // 如果查询为空但 gt 存在
     
@@ -292,7 +262,7 @@ int main(int argc, char *argv[])
 
     // --- Flat 搜索 ---
     // ... (Flat 搜索基准测试代码保持不变) ...
-    auto flat_search_lambda = [&](const float* q, size_t k_param) {
+    auto flat_search_lambda = [&](float* q, size_t k_param) {
         return flat_search(base, q, base_number, vecdim, k_param);
     };
     std::vector<SearchResult> results_flat = benchmark_search(

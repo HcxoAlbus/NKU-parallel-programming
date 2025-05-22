@@ -7,27 +7,27 @@
 #include <limits>
 #include <cmath>
 #include <pthread.h>
-#include <numeric> // For std::iota
-#include <random>  // For K-means++ initialization
-#include <map>     // For merging results in search
-#include <chrono>  // For random seed
+#include <numeric> // 用于 std::iota
+#include <random>  // 用于 K-means++ 初始化
+#include <map>     // 用于在搜索中合并结果
+#include <chrono>  // 用于随机种子
 
-#include "simd_anns.h" // For inner_product_distance_simd
+#include "simd_anns.h" // 用于 inner_product_distance_simd
 
-// Forward declaration
+// 前向声明
 class IVFIndex;
 
-// --- Pthread Data Structures ---
+// --- Pthread 数据结构 ---
 
 struct KMeansAssignArgs {
     IVFIndex* ivf_instance;
-    size_t start_idx; // Start index of base_data to process
-    size_t end_idx;   // End index of base_data to process
+    size_t start_idx; // 要处理的 base_data 的起始索引
+    size_t end_idx;   // 要处理的 base_data 的结束索引
     const std::vector<float>* current_centroids_ptr;
     std::vector<int>* assignments_output_ptr; // assignments[base_data_idx] = cluster_idx
-    // For partial sums for centroid updates (one per thread)
-    std::vector<float>* local_sum_vectors_ptr; // Flat: num_clusters * dim
-    std::vector<int>* local_counts_ptr;        // Flat: num_clusters
+    // 用于质心更新的部分和 (每个线程一个)
+    std::vector<float>* local_sum_vectors_ptr; // 扁平数组: num_clusters * dim
+    std::vector<int>* local_counts_ptr;        // 扁平数组: num_clusters
 };
 
 struct SearchCentroidsArgs {
@@ -42,23 +42,23 @@ struct SearchListsArgs {
     IVFIndex* ivf_instance;
     const float* query_ptr;
     size_t k_neighbors;
-    const std::vector<int>* candidate_cluster_indices_ptr; // All nprobe cluster indices
-    size_t task_start_idx_in_candidates; // Index into candidate_cluster_indices_ptr
-    size_t task_end_idx_in_candidates;   // Index into candidate_cluster_indices_ptr
+    const std::vector<int>* candidate_cluster_indices_ptr; // 所有 nprobe 簇索引
+    size_t task_start_idx_in_candidates; // candidate_cluster_indices_ptr 中的任务起始索引
+    size_t task_end_idx_in_candidates;   // candidate_cluster_indices_ptr 中的任务结束索引
     std::priority_queue<std::pair<float, uint32_t>>* thread_top_k_output_ptr;
 };
 
 
 class IVFIndex {
 public:
-    float* base_data_source_ptr; // Pointer to original base data
+    float* base_data_source_ptr; // 指向原始基准数据的指针
     size_t num_base_vectors;
     size_t vector_dim;
     size_t num_target_clusters;
     int num_threads_to_use;
 
-    std::vector<float> centroids_data; // Stored as flat array: num_clusters * dim
-    std::vector<std::vector<uint32_t>> inverted_lists_data; // Stores original indices of base_data_source_ptr
+    std::vector<float> centroids_data; // 以扁平数组存储: num_clusters * dim
+    std::vector<std::vector<uint32_t>> inverted_lists_data; // 存储 base_data_source_ptr 的原始索引
 
     IVFIndex(float* base_data, size_t n_base, size_t dim,
              size_t n_clusters, int n_threads, int kmeans_iterations = 20)
@@ -67,17 +67,17 @@ public:
           kmeans_max_iter(kmeans_iterations) {
         
         if (num_base_vectors == 0 || vector_dim == 0 || num_target_clusters == 0) {
-            // Or throw an exception
-            std::cerr << "IVFIndex: Invalid parameters (num_base, dim, or num_clusters is zero)." << std::endl;
+            // 或者抛出异常
+            std::cerr << "IVFIndex: 无效参数 (num_base, dim, 或 num_clusters 为零)." << std::endl;
             return;
         }
         if (num_target_clusters > num_base_vectors) {
-            std::cerr << "IVFIndex: Warning, num_clusters > num_base. Setting num_clusters = num_base." << std::endl;
+            std::cerr << "IVFIndex: 警告, num_clusters > num_base. 设置 num_clusters = num_base." << std::endl;
             num_target_clusters = num_base_vectors;
         }
 
         centroids_data.resize(num_target_clusters * vector_dim);
-        if (num_target_clusters > 0) { // Only initialize if there are clusters to form
+        if (num_target_clusters > 0) { // 仅当有簇要形成时才初始化
             initialize_centroids_kmeans_plus_plus();
             run_kmeans_parallel();
             build_inverted_lists();
@@ -90,11 +90,11 @@ public:
         const float* query, size_t k, size_t nprobe) {
         
         std::priority_queue<std::pair<float, uint32_t>> final_top_k;
-        if (k == 0 || num_target_clusters == 0) return final_top_k; // No clusters or k=0
-        if (nprobe == 0) nprobe = 1; // Default to searching at least one cluster
+        if (k == 0 || num_target_clusters == 0) return final_top_k; // 没有簇或 k=0
+        if (nprobe == 0) nprobe = 1; // 默认至少搜索一个簇
         if (nprobe > num_target_clusters) nprobe = num_target_clusters;
 
-        // Stage 1: Find nprobe closest centroids
+        // 阶段 1: 找到 nprobe 个最近的质心
         std::vector<std::pair<float, int>> all_centroid_distances; // pair: <distance, cluster_idx>
         all_centroid_distances.reserve(num_target_clusters);
 
@@ -108,11 +108,11 @@ public:
 
         for (int i = 0; i < num_threads_to_use; ++i) {
             size_t current_chunk_size = items_per_thread_s1 + (i < static_cast<int>(remainder_s1) ? 1 : 0);
-            if (current_chunk_size == 0 && current_start_idx_s1 < num_target_clusters) { // Ensure progress if num_threads > num_target_clusters
+            if (current_chunk_size == 0 && current_start_idx_s1 < num_target_clusters) { // 如果 num_threads > num_target_clusters，确保有进展
                  current_chunk_size = 1;
             }
-            if (current_start_idx_s1 >= num_target_clusters) { // No more work
-                args_stage1[i].start_centroid_idx = num_target_clusters; // Mark as no work
+            if (current_start_idx_s1 >= num_target_clusters) { // 没有更多工作
+                args_stage1[i].start_centroid_idx = num_target_clusters; // 标记为无工作
                 args_stage1[i].end_centroid_idx = num_target_clusters;
             } else {
                 args_stage1[i].ivf_instance = this;
@@ -124,14 +124,14 @@ public:
             
             if (i < num_threads_to_use - 1 && args_stage1[i].start_centroid_idx < args_stage1[i].end_centroid_idx) {
                 pthread_create(&threads_stage1[i], nullptr, search_centroids_worker_static, &args_stage1[i]);
-            } else if (args_stage1[i].start_centroid_idx < args_stage1[i].end_centroid_idx) { // Main thread does its part if work exists
+            } else if (args_stage1[i].start_centroid_idx < args_stage1[i].end_centroid_idx) { // 如果有工作，主线程执行其部分
                 search_centroids_worker_static(&args_stage1[i]);
             }
             current_start_idx_s1 += current_chunk_size;
         }
 
         for (int i = 0; i < num_threads_to_use - 1; ++i) {
-            if (args_stage1[i].start_centroid_idx < args_stage1[i].end_centroid_idx) { // Only join if thread was created for work
+            if (args_stage1[i].start_centroid_idx < args_stage1[i].end_centroid_idx) { // 仅当为工作创建了线程时才 join
                  pthread_join(threads_stage1[i], nullptr);
             }
         }
@@ -154,7 +154,7 @@ public:
             return final_top_k;
         }
 
-        // Stage 2: Search within selected nprobe clusters
+        // 阶段 2: 在选定的 nprobe 个簇内搜索
         std::vector<pthread_t> threads_stage2(num_threads_to_use - 1);
         std::vector<SearchListsArgs> args_stage2(num_threads_to_use);
         std::vector<std::priority_queue<std::pair<float, uint32_t>>> per_thread_top_k(num_threads_to_use);
@@ -196,7 +196,7 @@ public:
             }
         }
 
-        // Merge results from all threads
+        // 合并所有线程的结果
         for (int i = 0; i < num_threads_to_use; ++i) {
             while (!per_thread_top_k[i].empty()) {
                 std::pair<float, uint32_t> cand = per_thread_top_k[i].top();
@@ -221,9 +221,9 @@ private:
 
         std::vector<float> min_dist_sq(num_base_vectors, std::numeric_limits<float>::max());
         std::vector<bool> chosen(num_base_vectors, false);
-        std::mt19937 rng(std::chrono::system_clock::now().time_since_epoch().count()); // Random seed
+        std::mt19937 rng(std::chrono::system_clock::now().time_since_epoch().count()); // 随机种子
 
-        // 1. Choose one center uniformly at random.
+        // 1. 均匀随机选择一个中心。
         std::uniform_int_distribution<size_t> dist_idx(0, num_base_vectors - 1);
         size_t first_centroid_idx = dist_idx(rng);
         std::copy(base_data_source_ptr + first_centroid_idx * vector_dim,
@@ -231,7 +231,7 @@ private:
                   centroids_data.begin());
         chosen[first_centroid_idx] = true;
 
-        // Update distances based on the first centroid
+        // 根据第一个质心更新距离
         for (size_t i = 0; i < num_base_vectors; ++i) {
             if (i == first_centroid_idx) {
                  min_dist_sq[i] = 0.0f;
@@ -266,21 +266,21 @@ private:
                         break; 
                     }
                 }
-                if (!found_new) { // All points chosen or identical, duplicate previous
-                     if (c_idx > 0) { // Ensure there is a previous centroid
+                if (!found_new) { // 所有点都已选择或相同，复制前一个
+                     if (c_idx > 0) { // 确保存在前一个质心
                         std::copy(centroids_data.data() + (c_idx-1)*vector_dim,
                                 centroids_data.data() + c_idx*vector_dim,
                                 centroids_data.data() + c_idx*vector_dim);
-                     } else { // Should not happen if c_idx starts at 1, but as safeguard
-                        // Could pick a random point again if absolutely necessary
+                     } else { // 如果 c_idx 从 1 开始，则不应发生，但作为安全措施
+                        // 如果绝对必要，可以再次选择一个随机点
                         size_t rand_fallback_idx = dist_idx(rng);
                          std::copy(base_data_source_ptr + rand_fallback_idx * vector_dim,
                                   base_data_source_ptr + (rand_fallback_idx + 1) * vector_dim,
                                   centroids_data.data() + c_idx * vector_dim);
-                        chosen[rand_fallback_idx] = true; // Mark it, might be a duplicate but better than uninit
+                        chosen[rand_fallback_idx] = true; // 标记它，可能是一个副本，但总比未初始化好
                      }
                 }
-                // Update min_dist_sq for the next iteration of c_idx loop
+                // 为 c_idx 循环的下一次迭代更新 min_dist_sq
                 if (c_idx < num_target_clusters -1) {
                     const float* new_centroid_ptr = centroids_data.data() + c_idx * vector_dim;
                     for (size_t i = 0; i < num_base_vectors; ++i) {
@@ -291,7 +291,7 @@ private:
                         }
                     }
                 }
-                continue; // Skip to the next c_idx iteration
+                continue; // 跳到下一个 c_idx 迭代
             }
 
             std::uniform_real_distribution<double> dist_prob_selection(0.0, total_weight);
@@ -301,12 +301,12 @@ private:
             double current_sum = 0.0;
             for (size_t i = 0; i < num_base_vectors; ++i) {
                 current_sum += weights[i];
-                if (current_sum >= rand_val && !chosen[i]) { // Ensure not choosing an already chosen one due to float precision
+                if (current_sum >= rand_val && !chosen[i]) { // 由于浮点精度问题，确保不选择已选择的点
                     next_centroid_base_idx = i;
                     break;
                 }
             }
-             // Fallback if not found (e.g. all weighted points were already chosen, or numerical issue)
+             // 如果未找到（例如，所有加权点都已选择，或数值问题），则回退
             if (current_sum < rand_val || chosen[next_centroid_base_idx]) {
                  for(size_t i=0; i<num_base_vectors; ++i) if(!chosen[i]) {next_centroid_base_idx = i; break;}
             }
@@ -317,7 +317,7 @@ private:
                       centroids_data.data() + c_idx * vector_dim);
             chosen[next_centroid_base_idx] = true;
 
-            // Update min_dist_sq for all points based on the new centroid
+            // 根据新质心更新所有点的 min_dist_sq
             if (c_idx < num_target_clusters -1) { 
                 const float* new_centroid_ptr = centroids_data.data() + c_idx * vector_dim;
                 for (size_t i = 0; i < num_base_vectors; ++i) {
@@ -332,7 +332,7 @@ private:
     }
 
     void run_kmeans_parallel() {
-        if (num_target_clusters == 0) return; // No clusters to run k-means for
+        if (num_target_clusters == 0) return; // 没有簇可运行 k-means
         std::vector<int> assignments(num_base_vectors); 
 
         for (int iter = 0; iter < kmeans_max_iter; ++iter) {
@@ -405,13 +405,13 @@ private:
                         centroids_data[c * vector_dim + d] = new_val;
                     }
                 } else {
-                    // Handle empty cluster: re-initialize to a random data point not already a centroid
-                    // This is a simple strategy; more sophisticated ones exist.
-                    if (num_base_vectors > num_target_clusters) { // Only if there are spare points
-                        std::mt19937 rng_reinit(iter + c); // Seed differently
+                    // 处理空簇：重新初始化为一个尚未成为质心的随机数据点
+                    // 这是一个简单的策略；存在更复杂的策略。
+                    if (num_base_vectors > num_target_clusters) { // 仅当有备用点时
+                        std::mt19937 rng_reinit(iter + c); // 不同种子
                         std::uniform_int_distribution<size_t> dist_pt(0, num_base_vectors - 1);
                         size_t random_point_idx = dist_pt(rng_reinit);
-                        // A simple check to avoid picking an existing centroid point if possible, not exhaustive
+                        // 一个简单的检查，以尽可能避免选择现有的质心点，并非详尽无遗
                         bool is_already_centroid_approx = false;
                         for(size_t cc=0; cc < num_target_clusters; ++cc) {
                             if (cc == c) continue;
@@ -429,7 +429,7 @@ private:
                              std::copy(base_data_source_ptr + random_point_idx * vector_dim,
                                   base_data_source_ptr + (random_point_idx + 1) * vector_dim,
                                   centroids_data.data() + c * vector_dim);
-                            changed = true; // Re-initialization counts as a change
+                            changed = true; // 重新初始化算作更改
                         }
                     }
                 }
@@ -471,7 +471,7 @@ public:
         KMeansAssignArgs* data = static_cast<KMeansAssignArgs*>(arg);
         IVFIndex* self = data->ivf_instance;
 
-        if (data->start_idx >= data->end_idx) return nullptr; // No work for this thread
+        if (data->start_idx >= data->end_idx) return nullptr; // 此线程无工作
 
         std::fill(data->local_sum_vectors_ptr->begin(), data->local_sum_vectors_ptr->end(), 0.0f);
         std::fill(data->local_counts_ptr->begin(), data->local_counts_ptr->end(), 0);
