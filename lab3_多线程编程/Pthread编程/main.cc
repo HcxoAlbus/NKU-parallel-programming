@@ -24,6 +24,7 @@
 
 #include "ivf_pq_anns.h" // Include the new IVF-PQ header
 #include "ivf_pq_v1_anns.h" // Include the new IVF-PQ V1 header
+#include "ivf_pq_openmp_anns.h" // <<< 新增: 包含 OpenMP 版本的 IVF+PQ 头文件
 // --- 函数声明  ---
 std::priority_queue<std::pair<float, uint32_t>> flat_search(float* base, const float* query, size_t base_number, size_t vecdim, size_t k);
 std::priority_queue<std::pair<float, uint32_t>> simd_search(float* base, const float* query, size_t base_number, size_t vecdim, size_t k);
@@ -711,6 +712,92 @@ int main(int argc, char *argv[])
         std::cerr << "跳过 IVFADC (Method 1, Pthread) 搜索测试，因为索引创建失败。" << std::endl;
     }
 
+
+    // --- IVF + PQ Search (OpenMP) ---
+    std::cout << "\n--- IVFADC (IVF+PQ, OpenMP) 测试 ---" << std::endl;
+    size_t num_ivf_clusters_ivfpq_omp = num_ivf_clusters_ivfpq; // 使用与 Pthread 版本相同的配置进行比较
+    size_t pq_nsub_ivfpq_omp = pq_nsub_ivfpq;
+    double pq_train_ratio_ivfpq_omp = pq_train_ratio_ivfpq;
+    int ivf_kmeans_iter_ivfpq_omp = ivf_kmeans_iter_ivfpq;
+    int num_omp_threads_for_ivfpq = num_pthreads_for_ann; // 使用相同的线程数变量
+
+    IVFPQIndexOpenMP* ivfpq_omp_index_ptr = nullptr;
+    if (base_number > 0 && vecdim > 0 && num_ivf_clusters_ivfpq_omp > 0 && pq_nsub_ivfpq_omp > 0 && vecdim % pq_nsub_ivfpq_omp == 0) {
+        std::cout << "构建 IVFADC (OpenMP) 索引... IVF_clusters=" << num_ivf_clusters_ivfpq_omp
+                  << ", PQ_nsub=" << pq_nsub_ivfpq_omp
+                  << ", OpenMP_threads=" << num_omp_threads_for_ivfpq
+                  << ", ivf_kmeans_iter=" << ivf_kmeans_iter_ivfpq_omp << std::endl;
+        struct timeval build_start_ivfpq_omp, build_end_ivfpq_omp;
+        gettimeofday(&build_start_ivfpq_omp, NULL);
+        try {
+            ivfpq_omp_index_ptr = new IVFPQIndexOpenMP(vecdim,
+                                                       num_ivf_clusters_ivfpq_omp,
+                                                       pq_nsub_ivfpq_omp,
+                                                       num_omp_threads_for_ivfpq,
+                                                       ivf_kmeans_iter_ivfpq_omp);
+            ivfpq_omp_index_ptr->build(base, base_number, pq_train_ratio_ivfpq_omp);
+
+        } catch (const std::exception& e) {
+            std::cerr << "Error creating or building IVFPQ (OpenMP) index: " << e.what() << std::endl;
+            delete ivfpq_omp_index_ptr; // 确保清理
+            ivfpq_omp_index_ptr = nullptr;
+        }
+        gettimeofday(&build_end_ivfpq_omp, NULL);
+        if (ivfpq_omp_index_ptr) { 
+            long long build_time_us_ivfpq_omp = (build_end_ivfpq_omp.tv_sec - build_start_ivfpq_omp.tv_sec) * 1000000LL +
+                                           (build_end_ivfpq_omp.tv_usec - build_start_ivfpq_omp.tv_usec);
+            std::cout << "IVFADC (OpenMP) 索引构建时间: " << build_time_us_ivfpq_omp / 1000.0 << " ms" << std::endl;
+        }
+    } else {
+         std::cerr << "无法构建 IVFADC (OpenMP) 索引，参数无效 (base_number="<<base_number
+                   <<", vecdim="<<vecdim<<", ivf_clusters="<<num_ivf_clusters_ivfpq_omp
+                   <<", pq_nsub="<<pq_nsub_ivfpq_omp <<")." << std::endl;
+    }
+
+    if (ivfpq_omp_index_ptr) {
+        std::vector<size_t> nprobe_values_ivfpq_omp = {1, 2, 4, 8, 16}; // 直接初始化
+        // 应用与 Pthread 版本相似的逻辑来调整 nprobe 值
+        if (num_ivf_clusters_ivfpq_omp < 16 && num_ivf_clusters_ivfpq_omp > 0) {
+            nprobe_values_ivfpq_omp.clear();
+            for(size_t np_val = 1; np_val <= num_ivf_clusters_ivfpq_omp; np_val *=2) nprobe_values_ivfpq_omp.push_back(np_val);
+             if (nprobe_values_ivfpq_omp.empty() || nprobe_values_ivfpq_omp.back() < num_ivf_clusters_ivfpq_omp) {
+                 bool contains_max = false;
+                 for(size_t val : nprobe_values_ivfpq_omp) if(val == num_ivf_clusters_ivfpq_omp) contains_max = true;
+                 if(!contains_max && num_ivf_clusters_ivfpq_omp > 0) nprobe_values_ivfpq_omp.push_back(num_ivf_clusters_ivfpq_omp);
+             }
+            if (nprobe_values_ivfpq_omp.empty() && num_ivf_clusters_ivfpq_omp > 0) nprobe_values_ivfpq_omp.push_back(1);
+        } else if (num_ivf_clusters_ivfpq_omp == 0) {
+            nprobe_values_ivfpq_omp.clear();
+        }
+
+        size_t ivfpq_omp_rerank_k_global = pq_rerank_k_global; // 使用全局定义的 pq_rerank_k_global
+
+        for (size_t current_nprobe : nprobe_values_ivfpq_omp) {
+            if (current_nprobe == 0) continue;
+            size_t actual_nprobe = std::min(current_nprobe, num_ivf_clusters_ivfpq_omp);
+            if (actual_nprobe == 0 && num_ivf_clusters_ivfpq_omp > 0) actual_nprobe = 1;
+            else if (num_ivf_clusters_ivfpq_omp == 0) continue;
+
+            std::cout << "测试 IVFADC (OpenMP) 使用 nprobe = " << actual_nprobe << ", rerank_k = " << ivfpq_omp_rerank_k_global << std::endl;
+            auto ivfpq_omp_search_lambda = [&](const float* q, size_t k_param) {
+                return ivfpq_omp_index_ptr->search(q, base, k_param, actual_nprobe, ivfpq_omp_rerank_k_global);
+            };
+            // 对于 OpenMP 版本的 IVFADC，其内部已处理并行，benchmark_search 的 use_omp_parallel 应为 false
+            std::vector<SearchResult> results_ivfpq_omp = benchmark_search(
+               ivfpq_omp_search_lambda,
+               test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k, false); 
+
+            std::string ivfpq_omp_method_name = "IVFADC (OpenMP, nprobe=" + std::to_string(actual_nprobe) +
+                                            ", IVFclus=" + std::to_string(num_ivf_clusters_ivfpq_omp) +
+                                            ", PQnsub=" + std::to_string(pq_nsub_ivfpq_omp) +
+                                            ", rerank_k=" + std::to_string(ivfpq_omp_rerank_k_global) + ")";
+            print_results(ivfpq_omp_method_name, results_ivfpq_omp, num_queries_to_test);
+        }
+    } else {
+        std::cerr << "跳过 IVFADC (OpenMP) 搜索测试，因为索引创建失败。" << std::endl;
+    }
+
+
     // --- 打印结果 ---
     // ... (Print results for Flat, SIMD, PQ, SQ, IVF-only) ...
     std::cout << "\n--- 最终结果汇总 ---" << std::endl;
@@ -740,5 +827,6 @@ int main(int argc, char *argv[])
     delete ivf_omp_index_ptr; // Cleanup new OpenMP IVF index
     delete ivfpq_index_ptr; // Cleanup new index
     delete ivfpq_v1_index_ptr; // Cleanup new index
+    delete ivfpq_omp_index_ptr; // <<< 新增: 清理 OpenMP 版本的 IVF+PQ 索引
     return 0;
 }
