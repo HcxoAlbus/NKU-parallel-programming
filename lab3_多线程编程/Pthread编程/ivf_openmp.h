@@ -6,12 +6,12 @@
 #include <algorithm>
 #include <limits>
 #include <cmath>
-#include <numeric> // For std::iota
-#include <random>  // For K-means++ initialization
-#include <chrono>  // For random seed
-#include <omp.h>   // For OpenMP
+#include <numeric> // 用于 std::iota
+#include <random>  // 用于 K-means++ 初始化
+#include <chrono>  // 用于随机种子
+#include <omp.h>   // 用于 OpenMP
 
-#include "simd_anns.h" // For inner_product_distance_simd
+#include "simd_anns.h" // 用于 inner_product_distance_simd
 
 class IVFIndexOpenMP {
 public:
@@ -21,7 +21,7 @@ public:
     size_t num_target_clusters;
     int num_threads_to_use;
 
-    std::vector<float> centroids_data; // Stored as flat array: num_clusters * dim
+    std::vector<float> centroids_data; // 以扁平数组存储: num_clusters * dim
     std::vector<std::vector<uint32_t>> inverted_lists_data;
 
 private:
@@ -35,11 +35,11 @@ public:
           kmeans_max_iter(kmeans_iterations) {
 
         if (num_base_vectors == 0 || vector_dim == 0 || num_target_clusters == 0) {
-            std::cerr << "IVFIndexOpenMP: Invalid parameters (num_base, dim, or num_clusters is zero)." << std::endl;
+            std::cerr << "IVFIndexOpenMP: 无效参数 (num_base, dim, 或 num_clusters 为零)." << std::endl;
             return;
         }
         if (num_target_clusters > num_base_vectors) {
-            std::cerr << "IVFIndexOpenMP: Warning, num_clusters > num_base. Setting num_clusters = num_base." << std::endl;
+            std::cerr << "IVFIndexOpenMP: 警告, num_clusters > num_base. 设置 num_clusters = num_base." << std::endl;
             num_target_clusters = num_base_vectors;
         }
         
@@ -90,7 +90,7 @@ public:
             }
 
             size_t next_centroid_base_idx = 0;
-            if (total_weight == 0.0) { // All remaining points are identical or already chosen
+            if (total_weight == 0.0) { // 所有剩余点都相同或已被选择
                 bool found_new = false;
                 for (size_t i = 0; i < num_base_vectors; ++i) {
                     if (!chosen[i]) {
@@ -99,19 +99,19 @@ public:
                         break;
                     }
                 }
-                if (!found_new) { // All points chosen, duplicate previous
+                if (!found_new) { // 所有点都已选择，复制前一个
                      if (c_idx > 0) {
                         std::copy(centroids_data.data() + (c_idx-1)*vector_dim,
                                 centroids_data.data() + c_idx*vector_dim,
                                 centroids_data.data() + c_idx*vector_dim);
-                     } else { // Should not happen if c_idx starts at 1
+                     } else { // 如果 c_idx 从 1 开始，则不应发生
                         size_t rand_fallback_idx = dist_idx(rng);
                          std::copy(base_data_source_ptr + rand_fallback_idx * vector_dim,
                                   base_data_source_ptr + (rand_fallback_idx + 1) * vector_dim,
                                   centroids_data.data() + c_idx * vector_dim);
                         chosen[rand_fallback_idx] = true;
                      }
-                     // No need to update min_dist_sq if we duplicated or no new point
+                     // 如果我们复制了或没有新点，则无需更新 min_dist_sq
                      continue;
                 }
             } else {
@@ -125,7 +125,7 @@ public:
                         break;
                     }
                 }
-                if (chosen[next_centroid_base_idx] || current_sum < rand_val) { // Fallback
+                if (chosen[next_centroid_base_idx] || current_sum < rand_val) { // 回退机制
                      for(size_t i=0; i<num_base_vectors; ++i) if(!chosen[i]) {next_centroid_base_idx = i; break;}
                 }
             }
@@ -197,7 +197,7 @@ public:
                         }
                     }
                 }
-            } // End parallel region
+            } // 结束并行区域
 
             bool changed = false;
             for (size_t c = 0; c < num_target_clusters; ++c) {
@@ -209,14 +209,14 @@ public:
                         }
                         centroids_data[c * vector_dim + d] = new_val;
                     }
-                } else { // Handle empty cluster
+                } else { // 处理空簇
                     if (num_base_vectors > num_target_clusters) {
-                        std::mt19937 rng_reinit(iter + c + omp_get_thread_num()); // Add thread_num for more seed variance if in parallel
+                        std::mt19937 rng_reinit(iter + c + omp_get_thread_num()); // 如果在并行中，添加 thread_num 以获得更多种子方差
                         std::uniform_int_distribution<size_t> dist_pt(0, num_base_vectors - 1);
                         size_t random_point_idx = dist_pt(rng_reinit);
                         
                         bool is_already_centroid_approx = false;
-                        // This check can be simplified or made more robust
+                        // 这个检查可以简化或使其更健壮
                         for(size_t cc=0; cc < num_target_clusters; ++cc) {
                             if (cc == c) continue;
                             float dist_to_other_centroid_sq = 0;
@@ -224,7 +224,7 @@ public:
                                 float diff = base_data_source_ptr[random_point_idx*vector_dim + dd] - centroids_data[cc*vector_dim + dd];
                                 dist_to_other_centroid_sq += diff*diff;
                             }
-                            if (dist_to_other_centroid_sq < 1e-12) { // Compare squared dist
+                            if (dist_to_other_centroid_sq < 1e-12) { // 比较平方距离
                                 is_already_centroid_approx = true;
                                 break;
                             }
@@ -266,8 +266,8 @@ public:
             assignments[i] = best_cluster;
         }
 
-        // Populate inverted lists sequentially from assignments
-        // This part is typically not the bottleneck. Parallelizing push_back to vectors is complex.
+        // 从 assignments 顺序填充倒排列表
+        // 这部分通常不是瓶颈。并行化对向量的 push_back 很复杂。
         for (size_t i = 0; i < num_base_vectors; ++i) {
             if (assignments[i] >= 0 && static_cast<size_t>(assignments[i]) < num_target_clusters) {
                 inverted_lists_data[assignments[i]].push_back(static_cast<uint32_t>(i));
@@ -283,7 +283,7 @@ public:
         if (nprobe == 0) nprobe = 1;
         if (nprobe > num_target_clusters) nprobe = num_target_clusters;
 
-        // Stage 1: Find nprobe closest centroids
+        // 阶段 1: 找到 nprobe 个最近的质心
         std::vector<std::pair<float, int>> all_centroid_distances;
         all_centroid_distances.reserve(num_target_clusters);
 
@@ -292,7 +292,7 @@ public:
         #pragma omp parallel num_threads(stage1_threads)
         {
             std::vector<std::pair<float, int>> local_centroid_distances;
-            local_centroid_distances.reserve(num_target_clusters / stage1_threads + 1); // Pre-allocate
+            local_centroid_distances.reserve(num_target_clusters / stage1_threads + 1); // 预分配
             
             #pragma omp for schedule(static)
             for (size_t c_idx = 0; c_idx < num_target_clusters; ++c_idx) {
@@ -321,8 +321,8 @@ public:
             return final_top_k;
         }
 
-        // Stage 2: Search within selected nprobe clusters
-        // Determine effective number of threads for stage 2 based on nprobe_cluster_indices.size()
+        // 阶段 2: 在选定的 nprobe 个簇内搜索
+        // 根据 nprobe_cluster_indices.size() 确定阶段 2 的有效线程数
         int stage2_threads = std::max(1, (nprobe_cluster_indices.empty()) ? 1 : std::min(num_threads_to_use, static_cast<int>(nprobe_cluster_indices.size())));
         std::vector<std::priority_queue<std::pair<float, uint32_t>>> per_thread_top_k_queues(stage2_threads);
 
@@ -330,10 +330,10 @@ public:
         #pragma omp parallel num_threads(stage2_threads)
         {
             int tid = omp_get_thread_num();
-            // Each thread works on its own priority queue from the vector
-            // std::priority_queue<std::pair<float, uint32_t>> local_pq; // This is also an option
+            // 每个线程从向量中处理自己的优先队列
+            // std::priority_queue<std::pair<float, uint32_t>> local_pq; // 这也是一个选项
 
-            #pragma omp for schedule(dynamic) // Dynamic schedule as lists can vary in size
+            #pragma omp for schedule(dynamic) // 动态调度，因为列表大小可能不同
             for (size_t i = 0; i < nprobe_cluster_indices.size(); ++i) {
                 int cluster_idx = nprobe_cluster_indices[i];
                 if (cluster_idx < 0 || static_cast<size_t>(cluster_idx) >= inverted_lists_data.size()) continue;
@@ -351,9 +351,9 @@ public:
                     }
                 }
             }
-        } // End parallel region for stage 2
+        } // 结束阶段 2 的并行区域
 
-        // Merge results from per_thread_top_k_queues
+        // 合并来自 per_thread_top_k_queues 的结果
         for (int i = 0; i < stage2_threads; ++i) {
             while (!per_thread_top_k_queues[i].empty()) {
                 std::pair<float, uint32_t> cand = per_thread_top_k_queues[i].top();

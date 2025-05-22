@@ -12,23 +12,23 @@
 #include <map>
 #include <chrono>
 #include <iostream>
-#include <cstring> // For memcpy/memset
+#include <cstring> // 用于 memcpy/memset
 #include <stdexcept>
 
-#include "simd_anns.h" // For inner_product_distance_simd (for reranking) and compute_l2_sq_neon
-#include "pq_anns.h"   // For ProductQuantizer
+#include "simd_anns.h" // 用于 inner_product_distance_simd（用于重排序）和 compute_l2_sq_neon
+#include "pq_anns.h"   // 用于 ProductQuantizer
 
-// Forward declaration
+// 前向声明
 class IVFPQIndex;
 
-// --- Pthread Data Structures for IVFPQIndex ---
+// --- IVFPQIndex 的 Pthread 数据结构 ---
 
 struct IVFPQ_KMeansAssignArgs {
     IVFPQIndex* ivfpq_instance;
     const float* all_base_data_ptr; 
     size_t start_idx_data;    
     size_t end_idx_data;      
-    const std::vector<float>* current_ivf_centroids_ptr;
+    const std::vector<float>* current_ivf_centroids_ptr; 
     std::vector<int>* assignments_output_ptr;    
     std::vector<float>* local_sum_vectors_ptr;    
     std::vector<int>* local_counts_ptr;        
@@ -58,22 +58,22 @@ class IVFPQIndex {
 private:
     size_t vecdim;
     size_t num_ivf_clusters;
-    ProductQuantizer* pq_quantizer; // Pointer, will be created in build()
-    size_t pq_nsub_config;          // Store nsub for PQ creation
+    ProductQuantizer* pq_quantizer; 
+    size_t pq_nsub_config;          
     size_t num_threads;
     int ivf_kmeans_iterations;
 
     std::vector<float> ivf_centroids_data; 
     std::vector<std::vector<uint32_t>> ivf_inverted_lists_data; 
 
-    // IVF uses L2 distance, consistent with PQ's internal L2. Reranking uses IP.
+    // IVF 使用 L2 距离，与 PQ 内部 L2 一致。重排序使用 IP。
     float compute_distance_ivf(const float* v1, const float* v2, size_t dim) const {
-        return compute_l2_sq_neon(v1, v2, dim); // L2 for IVF clustering and centroid search
+        return compute_l2_sq_neon(v1, v2, dim); 
     }
 
-    // Reranking uses IP distance to match benchmark
+    // 重排序使用 IP 距离以匹配基准
     float compute_distance_reranking(const float* v1, const float* v2, size_t dim) const {
-        return inner_product_distance_simd(v1, v2, dim); // IP for final reranking
+        return inner_product_distance_simd(v1, v2, dim); 
     }
 
     static void* kmeans_assign_worker_static(void* arg) {
@@ -132,8 +132,7 @@ private:
             return nullptr;
         }
         if (!query_dist_table || query_dist_table->empty()) {
-             if (pq) { // Only print error if PQ was expected to be usable
-                // std::cerr << "Worker: Invalid or empty query_pq_dist_table_ptr." << std::endl;
+             if (pq) { 
              }
             return nullptr;
         }
@@ -148,7 +147,6 @@ private:
             for (uint32_t point_orig_idx : point_indices_in_cluster) {
                 const uint8_t* item_code = pq->get_code_for_item(point_orig_idx);
                 if (item_code) {
-                    // This distance is L2 based, from pq_anns.h
                     float approx_dist_sq = pq->compute_asymmetric_distance_sq_with_table(item_code, *query_dist_table);
                     
                     if (data->thread_top_k_output_ptr->size() < data->k_to_collect) {
@@ -165,44 +163,39 @@ private:
 
 public:
     IVFPQIndex(size_t dim, size_t n_ivf_clusters, 
-               size_t pq_nsub, // nsub for ProductQuantizer
+               size_t pq_nsub, 
                size_t threads = 1, int ivf_iter = 20)
         : vecdim(dim), num_ivf_clusters(n_ivf_clusters), 
-          pq_quantizer(nullptr), // Initialize PQ pointer to null
+          pq_quantizer(nullptr), 
           pq_nsub_config(pq_nsub),
           num_threads(threads), ivf_kmeans_iterations(ivf_iter) {
-        if (vecdim == 0) throw std::invalid_argument("IVFPQIndex: Vector dimension cannot be zero.");
-        if (pq_nsub_config == 0) throw std::invalid_argument("IVFPQIndex: pq_nsub cannot be zero.");
+        if (vecdim == 0) throw std::invalid_argument("IVFPQIndex: 向量维度不能为零。");
+        if (pq_nsub_config == 0) throw std::invalid_argument("IVFPQIndex: pq_nsub 不能为零。");
         if (vecdim % pq_nsub_config != 0) {
-            // This check is also in pq_anns.h constructor, but good to have early.
-            // std::cerr << "IVFPQIndex Warning: vecdim (" << vecdim << ") is not divisible by pq_nsub (" << pq_nsub_config << ")." << std::endl;
-            // The PQ constructor will throw if this is an issue.
         }
     }
 
     ~IVFPQIndex() {
-        delete pq_quantizer; // Safe to delete nullptr
+        delete pq_quantizer; 
     }
     
     void build(const float* all_base_data, size_t num_all_base_data, 
                double pq_train_ratio_for_pq) { 
         if (!all_base_data || num_all_base_data == 0) {
-            std::cerr << "IVFPQ: Base data is empty, cannot build." << std::endl;
+            std::cerr << "IVFPQ: 基数据为空，无法构建。" << std::endl;
             return;
         }
         if (num_ivf_clusters > 0 && num_all_base_data < num_ivf_clusters) {
-             std::cerr << "IVFPQ: Warning - number of base vectors (" << num_all_base_data 
-                       << ") is less than num_ivf_clusters (" << num_ivf_clusters << ")." << std::endl;
+             std::cerr << "IVFPQ: 警告 - 基向量数量 (" << num_all_base_data 
+                       << ") 小于 num_ivf_clusters (" << num_ivf_clusters << ")。" << std::endl;
         }
 
-        // 1. Build IVF part (K-means for centroids, then assign points to lists)
-        // Using L2 distance for IVF part
         if (num_ivf_clusters > 0) {
-            std::cout << "IVFPQ: Building IVF part (L2-based)... (clusters=" << num_ivf_clusters 
+            std::cout << "IVFPQ: 构建 IVF 部分（基于 L2）... (clusters=" << num_ivf_clusters 
                       << ", iters=" << ivf_kmeans_iterations << ")" << std::endl;
             ivf_centroids_data.assign(num_ivf_clusters * vecdim, 0.0f);
             
-            std::mt19937 rng(std::chrono::system_clock::now().time_since_epoch().count() + 1); // Seed + 1
+            std::mt19937 rng(std::chrono::system_clock::now().time_since_epoch().count() + 1); 
             std::vector<size_t> initial_centroid_indices(num_all_base_data); 
             std::iota(initial_centroid_indices.begin(), initial_centroid_indices.end(), 0);
             std::shuffle(initial_centroid_indices.begin(), initial_centroid_indices.end(), rng);
@@ -241,7 +234,7 @@ public:
                     kmeans_args[t].local_counts_ptr = &per_thread_counts[t];
                     
                     if (chunk > 0) {
-                        if (t < num_threads -1 && num_threads > 1) { // Check num_threads > 1
+                        if (t < num_threads -1 && num_threads > 1) { 
                              pthread_create(&kmeans_threads[t], nullptr, kmeans_assign_worker_static, &kmeans_args[t]);
                         } else {
                              kmeans_assign_worker_static(&kmeans_args[t]); 
@@ -250,7 +243,7 @@ public:
                     current_data_start_idx += chunk;
                 }
 
-                for(size_t t=0; t < num_threads -1 && num_threads > 1; ++t) { // Check num_threads > 1
+                for(size_t t=0; t < num_threads -1 && num_threads > 1; ++t) { 
                     if (kmeans_args[t].start_idx_data < kmeans_args[t].end_idx_data) { 
                         pthread_join(kmeans_threads[t], nullptr);
                     }
@@ -261,7 +254,7 @@ public:
                         for(size_t c=0; c < num_ivf_clusters; ++c) {
                             if (per_thread_counts[t][c] > 0) {
                                 iteration_centroids_count[c] += per_thread_counts[t][c];
-                                for(size_t d_dim=0; d_dim < vecdim; ++d_dim) { // Renamed d to d_dim
+                                for(size_t d_dim=0; d_dim < vecdim; ++d_dim) { 
                                     iteration_centroids_sum[c * vecdim + d_dim] += per_thread_sums[t][c * vecdim + d_dim];
                                 }
                             }
@@ -272,7 +265,7 @@ public:
                 bool converged = true;
                 for (size_t c = 0; c < num_ivf_clusters; ++c) {
                     if (iteration_centroids_count[c] > 0) {
-                        for (size_t d_dim = 0; d_dim < vecdim; ++d_dim) { // Renamed d to d_dim
+                        for (size_t d_dim = 0; d_dim < vecdim; ++d_dim) { 
                             float new_val = iteration_centroids_sum[c * vecdim + d_dim] / iteration_centroids_count[c];
                             if (std::abs(new_val - ivf_centroids_data[c * vecdim + d_dim]) > 1e-5) { 
                                 converged = false;
@@ -280,7 +273,7 @@ public:
                             ivf_centroids_data[c * vecdim + d_dim] = new_val;
                         }
                     } else {
-                        if (num_all_base_data > 0) { // Re-initialize empty cluster
+                        if (num_all_base_data > 0) { 
                              size_t rand_idx = initial_centroid_indices[rng() % num_all_base_data]; 
                              memcpy(ivf_centroids_data.data() + c * vecdim, all_base_data + rand_idx * vecdim, vecdim * sizeof(float));
                              converged = false; 
@@ -298,53 +291,48 @@ public:
                     ivf_inverted_lists_data[assignments[i]].push_back(static_cast<uint32_t>(i));
                  }
             }
-            std::cout << "IVFPQ: IVF part built." << std::endl;
+            std::cout << "IVFPQ: IVF 部分已构建。" << std::endl;
         }
 
-        // 2. Build PQ part by creating ProductQuantizer instance
-        // This will use the constructor from pq_anns.h which trains and encodes.
-        std::cout << "IVFPQ: Building PQ part (L2-based)..." << std::endl;
-        delete pq_quantizer; // Delete old one if any (e.g. re-building)
+        std::cout << "IVFPQ: 构建 PQ 部分（基于 L2）..." << std::endl;
+        delete pq_quantizer; 
         try {
-            // pq_ksub is fixed to 256 in the ProductQuantizer constructor from pq_anns.h
             pq_quantizer = new ProductQuantizer(all_base_data, num_all_base_data, vecdim, 
                                                 this->pq_nsub_config, pq_train_ratio_for_pq);
         } catch (const std::exception& e) {
-            std::cerr << "IVFPQ: Error creating ProductQuantizer: " << e.what() << std::endl;
-            pq_quantizer = nullptr; // Ensure it's null on failure
-            // Decide if IVFPQ build should fail entirely or proceed without PQ
-            throw; // Re-throw to indicate build failure
+            std::cerr << "IVFPQ: 创建 ProductQuantizer 出错: " << e.what() << std::endl;
+            pq_quantizer = nullptr; 
+            throw; 
         }
         
-        if (pq_quantizer) { // pq_anns.h constructor prints its own messages
-            std::cout << "IVFPQ: PQ part built and data encoded by ProductQuantizer." << std::endl;
+        if (pq_quantizer) { 
+            std::cout << "IVFPQ: PQ 部分已构建并由 ProductQuantizer 编码数据。" << std::endl;
         } else {
-            std::cerr << "IVFPQ: PQ part could not be built." << std::endl;
+            std::cerr << "IVFPQ: PQ 部分无法构建。" << std::endl;
         }
     }
 
 
     std::priority_queue<std::pair<float, uint32_t>> search(
         const float* query,
-        const float* base_data_for_reranking, // For exact IP distance calculation during reranking
+        const float* base_data_for_reranking, 
         size_t k,
         size_t nprobe,
         size_t rerank_k_candidates = 0
     ) {
-        std::priority_queue<std::pair<float, uint32_t>> final_results_heap; // Used for reranked results or if no reranking
+        std::priority_queue<std::pair<float, uint32_t>> final_results_heap; 
 
         if (k == 0) {
-            return final_results_heap; // Return empty heap
+            return final_results_heap; 
         }
         if (!pq_quantizer) {
-            std::cerr << "IVFPQ search: ProductQuantizer not available. Build failed or not called." << std::endl;
-            return final_results_heap; // Return empty heap
+            std::cerr << "IVFPQ search: ProductQuantizer 不可用。构建失败或未调用。" << std::endl;
+            return final_results_heap; 
         }
-        // The pq_quantizer from pq_anns.h is always "trained" if constructed with data.
 
         bool ivf_active = (num_ivf_clusters > 0 && !ivf_centroids_data.empty() && !ivf_inverted_lists_data.empty());
         if (ivf_active && nprobe == 0) {
-            nprobe = 1; // Default to 1 if IVF is active but nprobe is 0
+            nprobe = 1; 
         }
         if (ivf_active && nprobe > num_ivf_clusters) {
             nprobe = num_ivf_clusters;
@@ -352,7 +340,6 @@ public:
 
         std::vector<int> nprobe_cluster_indices;
         if (ivf_active) {
-            // Stage 1: Find nprobe closest IVF centroids (L2 distance)
             std::vector<std::pair<float, int>> all_ivf_centroid_distances;
             all_ivf_centroid_distances.reserve(num_ivf_clusters);
 
@@ -376,7 +363,7 @@ public:
                     if (args_stage1[i].start_centroid_idx < args_stage1[i].end_centroid_idx) {
                          pthread_create(&threads_stage1[i], nullptr, search_ivf_centroids_worker_static, &args_stage1[i]);
                     }
-                } else { // Last thread (or only thread) executes in main thread
+                } else { 
                     if (args_stage1[i].start_centroid_idx < args_stage1[i].end_centroid_idx) {
                         search_ivf_centroids_worker_static(&args_stage1[i]);
                     }
@@ -404,66 +391,57 @@ public:
             }
 
             if (nprobe_cluster_indices.empty() && num_ivf_clusters > 0 && nprobe > 0) {
-                // This can happen if all_ivf_centroid_distances was empty,
-                // which implies num_ivf_clusters might have been 0 or an issue in worker.
-                // Or if nprobe was valid but no centroids were found (should not happen if num_ivf_clusters > 0)
-                std::cerr << "IVFPQ search: No IVF candidate clusters found after Stage 1. Returning empty." << std::endl;
-                return final_results_heap; // Return empty heap
+                std::cerr << "IVFPQ search: 阶段1后未找到 IVF 候选簇。返回空。" << std::endl;
+                return final_results_heap; 
             }
-        } else { // IVF not active, this search mode is not appropriate
-             std::cerr << "IVFPQ search: IVF part not active. Standard IVFPQ search cannot proceed." << std::endl;
-             return final_results_heap; // Return empty heap
+        } else { 
+             std::cerr << "IVFPQ search: IVF 部分未激活。标准 IVFPQ 搜索无法继续。" << std::endl;
+             return final_results_heap; 
         }
 
         if (nprobe_cluster_indices.empty() && ivf_active) {
-             // Should have been caught above, but as a safeguard
-             std::cerr << "IVFPQ search: nprobe_cluster_indices is empty despite IVF being active. Returning empty." << std::endl;
-             return final_results_heap; // Return empty heap
+             std::cerr << "IVFPQ search: nprobe_cluster_indices 为空但 IVF 激活。返回空。" << std::endl;
+             return final_results_heap; 
         }
 
 
-        // Stage 2: Search within selected nprobe clusters using PQ codes (L2 distance)
-        // Determine k for this stage: if reranking, collect more candidates.
         bool perform_reranking = (rerank_k_candidates > k && base_data_for_reranking != nullptr);
         size_t k_for_pq_stage = perform_reranking ? rerank_k_candidates : k;
-        if (k_for_pq_stage == 0 && k > 0) { // Ensure k_for_pq_stage is at least k if k > 0
+        if (k_for_pq_stage == 0 && k > 0) { 
             k_for_pq_stage = k;
         }
-        if (k_for_pq_stage == 0) { // If k and rerank_k_candidates are 0, nothing to do
+        if (k_for_pq_stage == 0) { 
             return final_results_heap;
         }
 
 
-        std::priority_queue<std::pair<float, uint32_t>> merged_pq_candidates_heap; // Max-heap for PQ results
+        std::priority_queue<std::pair<float, uint32_t>> merged_pq_candidates_heap; 
 
         std::vector<pthread_t> threads_stage2(num_threads > 1 ? num_threads - 1 : 0);
         std::vector<IVFPQ_SearchListsPQArgs> args_stage2(num_threads);
-        // Each thread gets its own priority queue (max-heap)
         std::vector<std::priority_queue<std::pair<float, uint32_t>>> per_thread_top_k_pq(num_threads);
 
-        // Precompute distance table for the query (L2 distances to PQ sub-centroids)
         std::vector<float> query_pq_dist_table;
-        pq_quantizer->compute_query_distance_table(query, query_pq_dist_table); // Uses L2
+        pq_quantizer->compute_query_distance_table(query, query_pq_dist_table); 
 
         if (query_pq_dist_table.empty()) {
-            std::cerr << "IVFPQ search: Failed to compute PQ distance table. Returning empty." << std::endl;
-            return final_results_heap; // Return empty heap
+            std::cerr << "IVFPQ search: 计算 PQ 距离表失败。返回空。" << std::endl;
+            return final_results_heap; 
         }
 
         size_t num_candidate_clusters_to_search = nprobe_cluster_indices.size();
         if (num_candidate_clusters_to_search == 0 && ivf_active) {
-             // This case should ideally be handled before, but as a safeguard
             return final_results_heap;
         }
 
 
         size_t clusters_per_thread_s2 = num_candidate_clusters_to_search / num_threads;
         size_t remainder_s2 = num_candidate_clusters_to_search % num_threads;
-        size_t current_cluster_offset_s2 = 0; // This is an index into nprobe_cluster_indices
+        size_t current_cluster_offset_s2 = 0; 
 
         for (size_t i = 0; i < num_threads; ++i) {
             args_stage2[i].ivfpq_instance = this;
-            args_stage2[i].k_to_collect = k_for_pq_stage; // Each thread tries to collect up to this many
+            args_stage2[i].k_to_collect = k_for_pq_stage; 
             args_stage2[i].candidate_cluster_indices_ptr = &nprobe_cluster_indices;
             args_stage2[i].task_start_idx_in_candidates = current_cluster_offset_s2;
             size_t chunk = clusters_per_thread_s2 + (i < remainder_s2 ? 1 : 0);
@@ -476,15 +454,13 @@ public:
                 if (args_stage2[i].task_start_idx_in_candidates < args_stage2[i].task_end_idx_in_candidates) {
                     pthread_create(&threads_stage2[i], nullptr, search_lists_pq_worker_static, &args_stage2[i]);
                 }
-            } else { // Last thread (or only thread)
+            } else { 
                 if (args_stage2[i].task_start_idx_in_candidates < args_stage2[i].task_end_idx_in_candidates) {
                     search_lists_pq_worker_static(&args_stage2[i]);
                 }
             }
             current_cluster_offset_s2 += chunk;
-            // Ensure we don't create tasks for empty ranges if num_candidate_clusters_to_search is small
             if (current_cluster_offset_s2 >= num_candidate_clusters_to_search && i < num_threads -1) {
-                 // Mark remaining args as having no work, so join logic doesn't hang
                 for (size_t j = i + 1; j < num_threads; ++j) {
                     args_stage2[j].task_start_idx_in_candidates = 0;
                     args_stage2[j].task_end_idx_in_candidates = 0;
@@ -499,17 +475,15 @@ public:
             }
         }
 
-        // Merge results from all threads (PQ stage)
         for (size_t i = 0; i < num_threads; ++i) {
-            // Check if the task had work or if the queue has items (worker might have run even if start==end but queue was pre-filled for some reason)
             if (args_stage2[i].task_start_idx_in_candidates < args_stage2[i].task_end_idx_in_candidates || !per_thread_top_k_pq[i].empty()) {
                 while (!per_thread_top_k_pq[i].empty()) {
                     std::pair<float, uint32_t> cand = per_thread_top_k_pq[i].top();
-                    per_thread_top_k_pq[i].pop(); // cand is {L2_dist_sq_pq, original_base_idx}
+                    per_thread_top_k_pq[i].pop(); 
 
                     if (merged_pq_candidates_heap.size() < k_for_pq_stage) {
                         merged_pq_candidates_heap.push(cand);
-                    } else if (cand.first < merged_pq_candidates_heap.top().first) { // Smaller L2 distance is better
+                    } else if (cand.first < merged_pq_candidates_heap.top().first) { 
                         merged_pq_candidates_heap.pop();
                         merged_pq_candidates_heap.push(cand);
                     }
@@ -517,47 +491,30 @@ public:
             }
         }
 
-        // Stage 3: Reranking (if enabled)
         if (perform_reranking) {
-            // perform_reranking implies base_data_for_reranking != nullptr and rerank_k_candidates > k
-
-            // final_results_heap is already declared and empty. It will store IP distances.
             std::vector<std::pair<float, uint32_t>> pq_candidates_vec;
             pq_candidates_vec.reserve(merged_pq_candidates_heap.size());
             while(!merged_pq_candidates_heap.empty()){
-                pq_candidates_vec.push_back(merged_pq_candidates_heap.top()); // top is largest L2 dist
-                merged_pq_candidates_heap.pop(); // Empties merged_pq_candidates_heap
+                pq_candidates_vec.push_back(merged_pq_candidates_heap.top()); 
+                merged_pq_candidates_heap.pop(); 
             }
-            // pq_candidates_vec now has up to k_for_pq_stage items, sorted by L2 dist (descending if popped from max-heap)
-            // We want to rerank them using exact IP distance.
-            // The priority queue final_results_heap will store <IP_distance, original_idx> and keep the k smallest IP distances.
 
             for(const auto& pq_cand_pair : pq_candidates_vec){
                 uint32_t original_idx = pq_cand_pair.second;
-                // Ensure original_idx is valid for base_data_for_reranking
-                // This check might be redundant if build() ensures all indices are valid, but good for safety.
-                // if (original_idx >= num_all_base_data_used_in_build) continue; // Need access to this variable or assume valid
 
                 const float* exact_vec = base_data_for_reranking + static_cast<size_t>(original_idx) * vecdim;
-                float exact_ip_dist = compute_distance_reranking(query, exact_vec, vecdim); // IP distance
+                float exact_ip_dist = compute_distance_reranking(query, exact_vec, vecdim); 
 
                 if (final_results_heap.size() < k) {
                     final_results_heap.push({exact_ip_dist, original_idx});
-                } else if (exact_ip_dist < final_results_heap.top().first) { // Smaller IP distance is better
+                } else if (exact_ip_dist < final_results_heap.top().first) { 
                     final_results_heap.pop();
                     final_results_heap.push({exact_ip_dist, original_idx});
                 }
             }
-            return final_results_heap; // Contains top-k reranked results (IP distance)
+            return final_results_heap; 
         } else {
-            // No reranking (either rerank_k_candidates <= k or base_data_for_reranking is null).
-            // Return the L2-based PQ candidates from merged_pq_candidates_heap.
-            // This heap contains k_for_pq_stage candidates.
-            // The benchmark_search function will correctly pick the top k from this heap
-            // (it expects a max-heap where smaller distances are "better" but stored to be popped if larger).
-            // Since merged_pq_candidates_heap is already a max-heap of <L2_dist, id>,
-            // and benchmark_search also uses a max-heap, this is compatible.
-            return merged_pq_candidates_heap; // Contains k_for_pq_stage candidates (L2 PQ distance)
+            return merged_pq_candidates_heap; 
         }
     }
 };

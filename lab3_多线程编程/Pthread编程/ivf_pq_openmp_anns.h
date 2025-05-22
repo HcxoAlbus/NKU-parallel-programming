@@ -11,12 +11,12 @@
 #include <map>
 #include <chrono>
 #include <iostream>
-#include <cstring> // For memcpy/memset
+#include <cstring> // 用于 memcpy/memset
 #include <stdexcept>
 #include <omp.h>       // 引入 OpenMP
 
-#include "simd_anns.h" // For inner_product_distance_simd and compute_l2_sq_neon
-#include "pq_anns.h"   // For ProductQuantizer
+#include "simd_anns.h" // 用于 inner_product_distance_simd 和 compute_l2_sq_neon
+#include "pq_anns.h"   // 用于 ProductQuantizer
 
 class IVFPQIndexOpenMP {
 private:
@@ -49,11 +49,11 @@ public:
           pq_nsub_config(pq_nsub),
           num_threads_omp(threads > 0 ? threads : 1), // 确保线程数至少为1
           ivf_kmeans_iterations(ivf_iter) {
-        if (vecdim == 0) throw std::invalid_argument("IVFPQIndexOpenMP: Vector dimension cannot be zero.");
-        if (pq_nsub_config == 0) throw std::invalid_argument("IVFPQIndexOpenMP: pq_nsub cannot be zero.");
+        if (vecdim == 0) throw std::invalid_argument("IVFPQIndexOpenMP: 向量维度不能为零。");
+        if (pq_nsub_config == 0) throw std::invalid_argument("IVFPQIndexOpenMP: pq_nsub 不能为零。");
         if (vecdim > 0 && pq_nsub_config > 0 && vecdim % pq_nsub_config != 0) {
             // PQ 构造函数会处理这个问题，但提前警告可能有用
-            // std::cerr << "IVFPQIndexOpenMP Warning: vecdim is not divisible by pq_nsub." << std::endl;
+            // std::cerr << "IVFPQIndexOpenMP 警告: vecdim 不能被 pq_nsub 整除。" << std::endl;
         }
     }
 
@@ -64,18 +64,18 @@ public:
     void build(const float* all_base_data, size_t num_all_base_data, 
                double pq_train_ratio_for_pq) { 
         if (!all_base_data || num_all_base_data == 0) {
-            std::cerr << "IVFPQ-OpenMP: Base data is empty, cannot build." << std::endl;
+            std::cerr << "IVFPQ-OpenMP: 基准数据为空，无法构建。" << std::endl;
             return;
         }
         if (num_ivf_clusters > 0 && num_all_base_data < num_ivf_clusters) {
-             std::cerr << "IVFPQ-OpenMP: Warning - number of base vectors (" << num_all_base_data 
-                       << ") is less than num_ivf_clusters (" << num_ivf_clusters << ")." << std::endl;
+             std::cerr << "IVFPQ-OpenMP: 警告 - 基准向量数量 (" << num_all_base_data 
+                       << ") 小于 num_ivf_clusters (" << num_ivf_clusters << ")." << std::endl;
         }
 
         // 1. 构建 IVF 部分 (K-means)
         if (num_ivf_clusters > 0) {
-            std::cout << "IVFPQ-OpenMP: Building IVF part (L2-based)... (clusters=" << num_ivf_clusters 
-                      << ", iters=" << ivf_kmeans_iterations << ", threads=" << num_threads_omp << ")" << std::endl;
+            std::cout << "IVFPQ-OpenMP: 正在构建 IVF 部分 (基于 L2)... (簇数=" << num_ivf_clusters 
+                      << ", 迭代次数=" << ivf_kmeans_iterations << ", 线程数=" << num_threads_omp << ")" << std::endl;
             ivf_centroids_data.assign(num_ivf_clusters * vecdim, 0.0f);
             
             std::mt19937 rng(std::chrono::system_clock::now().time_since_epoch().count() + 2); // 不同种子
@@ -109,7 +109,7 @@ public:
                         float min_dist = std::numeric_limits<float>::max();
                         int best_cluster = -1;
 
-                        if (num_ivf_clusters == 0) continue; // Should not happen if loop entered
+                        if (num_ivf_clusters == 0) continue; // 如果进入循环则不应发生
 
                         for (size_t c = 0; c < num_ivf_clusters; ++c) {
                             const float* centroid = ivf_centroids_data.data() + c * vecdim; // 使用当前迭代的全局质心
@@ -161,7 +161,7 @@ public:
                     }
                 }
                 if (converged && iter > 0) {
-                    // std::cout << "IVF K-means converged at iteration " << iter + 1 << std::endl;
+                    // std::cout << "IVF K-means 在迭代 " << iter + 1 << " 次后收敛" << std::endl;
                     break; 
                 }
             }
@@ -173,25 +173,25 @@ public:
                     ivf_inverted_lists_data[assignments[i]].push_back(static_cast<uint32_t>(i));
                  }
             }
-            std::cout << "IVFPQ-OpenMP: IVF part built." << std::endl;
+            std::cout << "IVFPQ-OpenMP: IVF 部分构建完成。" << std::endl;
         }
 
         // 2. 构建 PQ 部分 (ProductQuantizer 内部已使用 OpenMP)
-        std::cout << "IVFPQ-OpenMP: Building PQ part (L2-based)..." << std::endl;
+        std::cout << "IVFPQ-OpenMP: 正在构建 PQ 部分 (基于 L2)..." << std::endl;
         delete pq_quantizer; 
         try {
             pq_quantizer = new ProductQuantizer(all_base_data, num_all_base_data, vecdim, 
                                                 this->pq_nsub_config, pq_train_ratio_for_pq);
         } catch (const std::exception& e) {
-            std::cerr << "IVFPQ-OpenMP: Error creating ProductQuantizer: " << e.what() << std::endl;
+            std::cerr << "IVFPQ-OpenMP: 创建 ProductQuantizer 时出错: " << e.what() << std::endl;
             pq_quantizer = nullptr; 
             throw; 
         }
         
         if (pq_quantizer) { 
-            std::cout << "IVFPQ-OpenMP: PQ part built and data encoded by ProductQuantizer." << std::endl;
+            std::cout << "IVFPQ-OpenMP: PQ 部分已构建，数据已由 ProductQuantizer 编码。" << std::endl;
         } else {
-            std::cerr << "IVFPQ-OpenMP: PQ part could not be built." << std::endl;
+            std::cerr << "IVFPQ-OpenMP: PQ 部分无法构建。" << std::endl;
         }
     }
 
@@ -207,7 +207,7 @@ public:
 
         if (k == 0) return final_results_heap;
         if (!pq_quantizer) {
-            std::cerr << "IVFPQ-OpenMP search: ProductQuantizer not available." << std::endl;
+            std::cerr << "IVFPQ-OpenMP 搜索: ProductQuantizer 不可用。" << std::endl;
             return final_results_heap;
         }
 
@@ -248,15 +248,15 @@ public:
             }
 
             if (nprobe_cluster_indices.empty() && num_ivf_clusters > 0 && nprobe > 0) {
-                std::cerr << "IVFPQ-OpenMP search: No IVF candidate clusters found. Returning empty." << std::endl;
+                std::cerr << "IVFPQ-OpenMP 搜索: 未找到 IVF 候选簇。返回空。" << std::endl;
                 return final_results_heap;
             }
         } else {
-             std::cerr << "IVFPQ-OpenMP search: IVF part not active. Standard IVFPQ search cannot proceed." << std::endl;
+             std::cerr << "IVFPQ-OpenMP 搜索: IVF 部分未激活。标准 IVFPQ 搜索无法继续。" << std::endl;
              return final_results_heap;
         }
         if (nprobe_cluster_indices.empty() && ivf_active) {
-             std::cerr << "IVFPQ-OpenMP search: nprobe_cluster_indices is empty. Returning empty." << std::endl;
+             std::cerr << "IVFPQ-OpenMP 搜索: nprobe_cluster_indices 为空。返回空。" << std::endl;
              return final_results_heap;
         }
 
@@ -270,7 +270,7 @@ public:
         pq_quantizer->compute_query_distance_table(query, query_pq_dist_table); 
 
         if (query_pq_dist_table.empty()) {
-            std::cerr << "IVFPQ-OpenMP search: Failed to compute PQ distance table. Returning empty." << std::endl;
+            std::cerr << "IVFPQ-OpenMP 搜索: 计算 PQ 距离表失败。返回空。" << std::endl;
             return final_results_heap;
         }
 
