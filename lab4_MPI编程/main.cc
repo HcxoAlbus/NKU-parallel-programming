@@ -26,7 +26,13 @@
 #include "ivf_pq_openmp_anns.h" 
 #include <mpi.h> 
 #include "ivf_mpi_anns.h" 
-#include "ivf_pq_mpi_anns.h" // <<< 新增: 包含 IVF PQ MPI 头文件
+#include "ivf_pq_mpi_anns.h"
+
+// =================================================================
+// <<< 新增: 包含 HNSWLIB 头文件 >>>
+#include "hnswlib/hnswlib/hnswlib.h"
+// =================================================================
+
 
 // --- 函数声明  ---
 std::priority_queue<std::pair<float, uint32_t>> flat_search(float* base, float* query, size_t base_number, size_t vecdim, size_t k);
@@ -152,7 +158,17 @@ std::vector<SearchResult> benchmark_search(
             const auto& gtset = gt_sets[i];
             if (!gtset.empty() && k > 0) {
                 size_t found_count = 0;
-                std::priority_queue<std::pair<float, uint32_t>> temp_heap = res_heap; // 复制堆以进行迭代
+                // 注意：hnswlib 返回的队列是小顶堆（距离/负内积），而我们通常用大顶堆（ID）
+                // 为了统一处理，我们将结果转换为标准的大顶堆
+                std::priority_queue<std::pair<float, uint32_t>> temp_heap;
+                while(!res_heap.empty()){
+                    // HNSW 返回 <distance, label>
+                    // flat_search 返回 <distance, label>
+                    // 统一为 <metric, id> 格式
+                    temp_heap.push(res_heap.top());
+                    res_heap.pop();
+                }
+
                 while(!temp_heap.empty()){
                     if(gtset.count(temp_heap.top().second)) {
                         found_count++;
@@ -345,8 +361,9 @@ int main(int argc, char *argv[])
     if (rank == 0) {
         // --- Flat 搜索 ---
         if (base != nullptr && test_query != nullptr) {
-            auto flat_search_lambda = [&](float* q, size_t k_param) {
-                return flat_search(base, q, base_number, vecdim, k_param);
+            auto flat_search_lambda = [&](const float* q, size_t k_param) {
+                // flat_search 期望非常量指针，进行类型转换
+                return flat_search(const_cast<float*>(base), const_cast<float*>(q), base_number, vecdim, k_param);
             };
             std::vector<SearchResult> results_flat = benchmark_search(
             flat_search_lambda, 
@@ -355,6 +372,64 @@ int main(int argc, char *argv[])
         } else {
             std::cout << "跳过 Flat 搜索，因为基准或查询数据为空。" << std::endl;
         }
+
+        // =================================================================
+        // <<< 新增: HNSW 性能测试 >>>
+        std::cout << "\n--- HNSW (hnswlib) 测试 ---" << std::endl;
+        const int M = 16;
+        const int efConstruction = 200;
+        hnswlib::HierarchicalNSW<float>* hnsw_index_ptr = nullptr;
+
+        if (base != nullptr && test_query != nullptr && base_number > 0 && vecdim > 0) {
+            std::cout << "构建 HNSW 索引... M=" << M << ", efConstruction=" << efConstruction << std::endl;
+            struct timeval build_start, build_end;
+            gettimeofday(&build_start, NULL);
+
+            // 使用内积空间，与示例保持一致
+            hnswlib::InnerProductSpace space(vecdim);
+            hnsw_index_ptr = new hnswlib::HierarchicalNSW<float>(&space, base_number, M, efConstruction);
+
+            // 使用 OpenMP 并行添加数据点
+            #pragma omp parallel for
+            for(int i = 0; i < base_number; ++i) {
+                hnsw_index_ptr->addPoint(base + i * vecdim, i);
+            }
+
+            gettimeofday(&build_end, NULL);
+            long long build_time_us = (build_end.tv_sec - build_start.tv_sec) * 1000000LL + (build_end.tv_usec - build_start.tv_usec);
+            std::cout << "HNSW 索引构建时间: " << build_time_us / 1000.0 << " ms" << std::endl;
+        } else {
+            std::cerr << "无法构建 HNSW 索引，参数无效或数据为空。" << std::endl;
+        }
+
+        if (hnsw_index_ptr) {
+            // 测试不同的 efSearch 参数
+            std::vector<size_t> ef_values = {k, 20, 40, 80, 160, 320};
+            for (size_t current_ef : ef_values) {
+                if (current_ef < k) continue; // ef 必须大于等于 k
+
+                std::cout << "测试 HNSW 使用 efSearch = " << current_ef << std::endl;
+                hnsw_index_ptr->setEf(current_ef);
+
+                auto hnsw_search_lambda = [&](const float* q, size_t k_param) {
+                    return hnsw_index_ptr->searchKnn(q, k_param);
+                };
+
+                // 使用 benchmark_search 的 OpenMP 并行化来加速多个查询
+                std::vector<SearchResult> results_hnsw = benchmark_search(
+                    hnsw_search_lambda,
+                    test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k, true);
+                
+                std::string hnsw_method_name = "HNSW (M=" + std::to_string(M) + 
+                                               ", efC=" + std::to_string(efConstruction) + 
+                                               ", efS=" + std::to_string(current_ef) + ")";
+                print_results(hnsw_method_name, results_hnsw, num_queries_to_test);
+            }
+        } else {
+            std::cerr << "跳过 HNSW 搜索测试，因为索引创建失败。" << std::endl;
+        }
+        // <<< HNSW 测试结束 >>>
+        // =================================================================
 
 
         // --- IVF 搜索 (Pthread) ---
@@ -644,6 +719,10 @@ int main(int argc, char *argv[])
             std::cerr << "跳过 IVFADC (OpenMP) 搜索测试，因为索引创建失败。" << std::endl;
         }
 
+        // =================================================================
+        // <<< 新增: HNSW 资源清理 >>>
+        delete hnsw_index_ptr;
+        // =================================================================
 
         delete ivf_index_ptr;
         delete ivf_omp_index_ptr; 
