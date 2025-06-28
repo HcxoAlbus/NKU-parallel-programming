@@ -867,8 +867,17 @@ int main(int argc, char *argv[])
         std::cout << "GPU throughput: " << (float)batch_size / gpu_total_time.count() * 1000 << " queries/second" << std::endl;
         
         // 计算加速比
-        float cpu_time_for_batch = (cpu_total_time.count() * batch_size) / test_number;
-        std::cout << "Speedup: " << cpu_time_for_batch / gpu_total_time.count() << "x" << std::endl;
+        // 方法1：基于平均延迟的加速比
+        float cpu_avg_time_per_query = cpu_avg_latency / test_number; // us per query
+        float gpu_avg_time_per_query = (float)gpu_total_time.count() * 1000 / batch_size; // us per query
+        float latency_speedup = cpu_avg_time_per_query / gpu_avg_time_per_query;
+        
+        // 方法2：基于吞吐量的加速比
+        float cpu_throughput = (float)test_number / cpu_total_time.count() * 1000; // queries/second
+        float gpu_throughput = (float)batch_size / gpu_total_time.count() * 1000; // queries/second
+        float throughput_speedup = gpu_throughput / cpu_throughput;
+        
+        std::cout << "Speedup (throughput): " << throughput_speedup << "x" << std::endl;
     }
     
     std::cout << "\n=== GPU 批量搜索测试 (优化版本) ===" << std::endl;
@@ -909,9 +918,18 @@ int main(int argc, char *argv[])
         std::cout << "GPU total time: " << gpu_total_time.count() << " ms" << std::endl;
         std::cout << "GPU throughput: " << (float)batch_size / gpu_total_time.count() * 1000 << " queries/second" << std::endl;
         
-        // 计算加速比
-        float cpu_time_for_batch = (cpu_total_time.count() * batch_size) / test_number;
-        std::cout << "Speedup: " << cpu_time_for_batch / gpu_total_time.count() << "x" << std::endl;
+        // 计算加速比 - 修复计算方式
+        // 方法1：基于平均延迟的加速比
+        float cpu_avg_time_per_query = cpu_avg_latency / test_number; // us per query
+        float gpu_avg_time_per_query = (float)gpu_total_time.count() * 1000 / batch_size; // us per query
+        float latency_speedup = cpu_avg_time_per_query / gpu_avg_time_per_query;
+        
+        // 方法2：基于吞吐量的加速比
+        float cpu_throughput = (float)test_number / cpu_total_time.count() * 1000; // queries/second
+        float gpu_throughput = (float)batch_size / gpu_total_time.count() * 1000; // queries/second
+        float throughput_speedup = gpu_throughput / cpu_throughput;
+        
+        std::cout << "Speedup (throughput): " << throughput_speedup << "x" << std::endl;
     }
     
     // 释放分配的内存
