@@ -165,6 +165,147 @@ __global__ void find_topk_simple(float* distances, int* results,
     }
 }
 
+// 添加更高效的Top-K选择核函数
+// #include <cooperative_groups.h>
+// using namespace cooperative_groups;
+
+// 使用共享内存的高效Top-K选择
+__global__ void find_topk_optimized(float* distances, int* results, 
+                                   int n, int m, int k) {
+    int query_idx = blockIdx.x;
+    int tid = threadIdx.x;
+    int block_size = blockDim.x;
+    
+    if (query_idx >= m) return;
+    
+    // 使用共享内存存储当前查询的所有距离
+    extern __shared__ float shared_distances[];
+    int* shared_indices = (int*)(shared_distances + n);
+    
+    // 协作加载距离数据到共享内存
+    for (int i = tid; i < n; i += block_size) {
+        shared_distances[i] = distances[i * m + query_idx];
+        shared_indices[i] = i;
+    }
+    __syncthreads();
+    
+    // 使用部分排序找到Top-K
+    for (int i = 0; i < k; i++) {
+        float min_dist = 1e10f;
+        int min_idx = -1;
+        int min_pos = -1;
+        
+        // 每个线程找到自己负责范围内的最小值
+        for (int j = tid; j < n - i; j += block_size) {
+            if (shared_distances[j] < min_dist) {
+                min_dist = shared_distances[j];
+                min_idx = shared_indices[j];
+                min_pos = j;
+            }
+        }
+        
+        // 使用reduction找到全局最小值
+        __shared__ float block_min_dist[256];
+        __shared__ int block_min_idx[256];
+        __shared__ int block_min_pos[256];
+        
+        block_min_dist[tid] = min_dist;
+        block_min_idx[tid] = min_idx;
+        block_min_pos[tid] = min_pos;
+        __syncthreads();
+        
+        // Reduction to find global minimum
+        for (int stride = block_size / 2; stride > 0; stride /= 2) {
+            if (tid < stride && tid + stride < block_size) {
+                if (block_min_dist[tid + stride] < block_min_dist[tid]) {
+                    block_min_dist[tid] = block_min_dist[tid + stride];
+                    block_min_idx[tid] = block_min_idx[tid + stride];
+                    block_min_pos[tid] = block_min_pos[tid + stride];
+                }
+            }
+            __syncthreads();
+        }
+        
+        // Thread 0 writes the result and removes the minimum
+        if (tid == 0) {
+            results[query_idx * k + i] = block_min_idx[0];
+            // 将找到的最小值移到末尾
+            if (block_min_pos[0] != n - 1 - i) {
+                shared_distances[block_min_pos[0]] = shared_distances[n - 1 - i];
+                shared_indices[block_min_pos[0]] = shared_indices[n - 1 - i];
+            }
+        }
+        __syncthreads();
+    }
+}
+
+// 使用更高效的基于堆的Top-K选择
+__device__ void heapify_down(float* heap_dist, int* heap_idx, int size, int idx) {
+    int largest = idx;
+    int left = 2 * idx + 1;
+    int right = 2 * idx + 2;
+    
+    if (left < size && heap_dist[left] > heap_dist[largest])
+        largest = left;
+    
+    if (right < size && heap_dist[right] > heap_dist[largest])
+        largest = right;
+    
+    if (largest != idx) {
+        // Swap distances
+        float temp_dist = heap_dist[idx];
+        heap_dist[idx] = heap_dist[largest];
+        heap_dist[largest] = temp_dist;
+        
+        // Swap indices
+        int temp_idx = heap_idx[idx];
+        heap_idx[idx] = heap_idx[largest];
+        heap_idx[largest] = temp_idx;
+        
+        heapify_down(heap_dist, heap_idx, size, largest);
+    }
+}
+
+__global__ void find_topk_heap(float* distances, int* results, 
+                               int n, int m, int k) {
+    int query_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (query_idx >= m) return;
+    
+    // 为每个线程分配局部堆
+    float heap_dist[20]; // 假设k <= 20
+    int heap_idx[20];
+    
+    // 初始化堆为前k个元素
+    for (int i = 0; i < k; i++) {
+        heap_dist[i] = distances[i * m + query_idx];
+        heap_idx[i] = i;
+    }
+    
+    // 构建最大堆
+    for (int i = k / 2 - 1; i >= 0; i--) {
+        heapify_down(heap_dist, heap_idx, k, i);
+    }
+    
+    // 处理剩余元素
+    for (int i = k; i < n; i++) {
+        float dist = distances[i * m + query_idx];
+        if (dist < heap_dist[0]) {
+            heap_dist[0] = dist;
+            heap_idx[0] = i;
+            heapify_down(heap_dist, heap_idx, k, 0);
+        }
+    }
+    
+    // 将堆转换为排序结果
+    for (int i = k - 1; i >= 0; i--) {
+        results[query_idx * k + i] = heap_idx[0];
+        heap_dist[0] = heap_dist[i];
+        heap_idx[0] = heap_idx[i];
+        heapify_down(heap_dist, heap_idx, i, 0);
+    }
+}
+
 // GPU版本的批量ANNS搜索
 std::vector<std::vector<int>> gpu_batch_search(float* base, float* queries, 
                                                size_t base_number, size_t vecdim, 
@@ -480,6 +621,94 @@ std::vector<std::vector<int>> gpu_batch_search_simple(float* base, float* querie
     return results;
 }
 
+// 优化的GPU批量搜索函数
+std::vector<std::vector<int>> gpu_batch_search_optimized(float* base, float* queries, 
+                                                        size_t base_number, size_t vecdim, 
+                                                        size_t query_number, size_t k) {
+    // 创建cuBLAS句柄
+    cublasHandle_t handle;
+    CUBLAS_CHECK(cublasCreate(&handle));
+    
+    // 分配GPU内存
+    float *d_base, *d_queries, *d_distances;
+    int *d_results;
+    
+    size_t base_size = base_number * vecdim * sizeof(float);
+    size_t query_size = query_number * vecdim * sizeof(float);
+    size_t distance_size = base_number * query_number * sizeof(float);
+    size_t result_size = query_number * k * sizeof(int);
+    
+    CUDA_CHECK(cudaMalloc(&d_base, base_size));
+    CUDA_CHECK(cudaMalloc(&d_queries, query_size));
+    CUDA_CHECK(cudaMalloc(&d_distances, distance_size));
+    CUDA_CHECK(cudaMalloc(&d_results, result_size));
+    
+    // 复制数据到GPU
+    CUDA_CHECK(cudaMemcpy(d_base, base, base_size, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_queries, queries, query_size, cudaMemcpyHostToDevice));
+    
+    const float alpha = 1.0f, beta = 0.0f;
+    
+    cudaEvent_t start, stop;
+    CUDA_CHECK(cudaEventCreate(&start));
+    CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
+    
+    // 执行矩阵乘法计算内积
+    CUBLAS_CHECK(cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N,
+                            query_number, base_number, vecdim,
+                            &alpha,
+                            d_queries, vecdim,
+                            d_base, vecdim,
+                            &beta,
+                            d_distances, query_number));
+    
+    // 将内积转换为距离
+    int total_elements = base_number * query_number;
+    int threads_per_block = 256;
+    int blocks = (total_elements + threads_per_block - 1) / threads_per_block;
+    
+    convert_to_distance_kernel<<<blocks, threads_per_block>>>(d_distances, total_elements);
+    CUDA_CHECK(cudaDeviceSynchronize());
+    
+    // 使用堆排序的Top-K选择 - 更高效
+    int topk_threads = 256;
+    int topk_blocks = (query_number + topk_threads - 1) / topk_threads;
+    find_topk_heap<<<topk_blocks, topk_threads>>>(d_distances, d_results,
+                                                  base_number, query_number, k);
+    
+    CUDA_CHECK(cudaEventRecord(stop));
+    CUDA_CHECK(cudaEventSynchronize(stop));
+    
+    float gpu_time;
+    CUDA_CHECK(cudaEventElapsedTime(&gpu_time, start, stop));
+    std::cout << "GPU batch processing time: " << gpu_time << " ms" << std::endl;
+    
+    // 复制结果回CPU
+    std::vector<int> h_results(query_number * k);
+    CUDA_CHECK(cudaMemcpy(h_results.data(), d_results, result_size, cudaMemcpyDeviceToHost));
+    
+    // 整理结果格式
+    std::vector<std::vector<int>> results(query_number);
+    for (int i = 0; i < query_number; i++) {
+        results[i].resize(k);
+        for (int j = 0; j < k; j++) {
+            results[i][j] = h_results[i * k + j];
+        }
+    }
+    
+    // 清理资源
+    CUDA_CHECK(cudaFree(d_base));
+    CUDA_CHECK(cudaFree(d_queries));
+    CUDA_CHECK(cudaFree(d_distances));
+    CUDA_CHECK(cudaFree(d_results));
+    CUDA_CHECK(cudaEventDestroy(start));
+    CUDA_CHECK(cudaEventDestroy(stop));
+    CUBLAS_CHECK(cublasDestroy(handle));
+    
+    return results;
+}
+
 template<typename T>
 T *LoadData(std::string data_path, size_t& n, size_t& d)
 {
@@ -596,19 +825,19 @@ int main(int argc, char *argv[])
     std::cout << "CPU average latency (us): " << cpu_avg_latency / test_number << std::endl;
     std::cout << "CPU total time: " << cpu_total_time.count() << " ms" << std::endl;
     
-    std::cout << "\n=== GPU 批量搜索测试 ===" << std::endl;
+    std::cout << "\n=== GPU 批量搜索测试 (原版本) ===" << std::endl;
     
     // GPU批量测试 - 不同的batch大小
-    std::vector<int> batch_sizes = {50, 100, 200, 500, 1000, 2000};
+    std::vector<int> batch_sizes = {100, 500, 1000, 2000};
     
     for (int batch_size : batch_sizes) {
         if (batch_size > test_number) continue;
         
-        std::cout << "\n--- Batch Size: " << batch_size << " ---" << std::endl;
+        std::cout << "\n--- Batch Size: " << batch_size << " (Original) ---" << std::endl;
         
         auto gpu_start_time = std::chrono::high_resolution_clock::now();
         
-        // 执行GPU批量搜索 - 使用简化版本进行调试
+        // 执行GPU批量搜索 - 使用原版本
         auto gpu_results = gpu_batch_search_simple(base, test_query, base_number, vecdim, batch_size, k);
         
         auto gpu_end_time = std::chrono::high_resolution_clock::now();
@@ -638,7 +867,50 @@ int main(int argc, char *argv[])
         std::cout << "GPU throughput: " << (float)batch_size / gpu_total_time.count() * 1000 << " queries/second" << std::endl;
         
         // 计算加速比
-        float cpu_time_for_batch = (cpu_total_time.count() * 1000) / test_number;
+        float cpu_time_for_batch = (cpu_total_time.count() * batch_size) / test_number;
+        std::cout << "Speedup: " << cpu_time_for_batch / gpu_total_time.count() << "x" << std::endl;
+    }
+    
+    std::cout << "\n=== GPU 批量搜索测试 (优化版本) ===" << std::endl;
+    
+    for (int batch_size : batch_sizes) {
+        if (batch_size > test_number) continue;
+        
+        std::cout << "\n--- Batch Size: " << batch_size << " (Optimized) ---" << std::endl;
+        
+        auto gpu_start_time = std::chrono::high_resolution_clock::now();
+        
+        // 执行GPU批量搜索 - 使用优化版本
+        auto gpu_results = gpu_batch_search_optimized(base, test_query, base_number, vecdim, batch_size, k);
+        
+        auto gpu_end_time = std::chrono::high_resolution_clock::now();
+        auto gpu_total_time = std::chrono::duration_cast<std::chrono::milliseconds>(gpu_end_time - gpu_start_time);
+        
+        // 计算GPU召回率
+        float gpu_avg_recall = 0;
+        for (int i = 0; i < batch_size; i++) {
+            std::set<uint32_t> gtset;
+            for(int j = 0; j < k; ++j){
+                int t = test_gt[j + i*test_gt_d];
+                gtset.insert(t);
+            }
+            
+            int correct = 0;
+            for (int j = 0; j < k; j++) {
+                if (gtset.find(gpu_results[i][j]) != gtset.end()) {
+                    correct++;
+                }
+            }
+            gpu_avg_recall += (float)correct / k;
+        }
+        gpu_avg_recall /= batch_size;
+        
+        std::cout << "GPU average recall: " << gpu_avg_recall << std::endl;
+        std::cout << "GPU total time: " << gpu_total_time.count() << " ms" << std::endl;
+        std::cout << "GPU throughput: " << (float)batch_size / gpu_total_time.count() * 1000 << " queries/second" << std::endl;
+        
+        // 计算加速比
+        float cpu_time_for_batch = (cpu_total_time.count() * batch_size) / test_number;
         std::cout << "Speedup: " << cpu_time_for_batch / gpu_total_time.count() << "x" << std::endl;
     }
     
