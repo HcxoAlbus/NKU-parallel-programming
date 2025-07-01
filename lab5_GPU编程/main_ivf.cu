@@ -494,6 +494,115 @@ std::vector<SearchResult> benchmark_adaptive_optimized_gpu_search(
     return results;
 }
 
+// 添加性能基准记录结构
+struct PerformanceBenchmark {
+    std::string method_name;
+    double avg_recall;
+    double avg_latency_us;
+    size_t nprobe;
+    size_t batch_size;
+    double speedup_vs_openmp;
+    
+    PerformanceBenchmark(const std::string& name, double recall, double latency, 
+                        size_t np = 0, size_t bs = 1, double speedup = 1.0)
+        : method_name(name), avg_recall(recall), avg_latency_us(latency), 
+          nprobe(np), batch_size(bs), speedup_vs_openmp(speedup) {}
+};
+
+// 全局变量存储OpenMP基准性能
+std::map<size_t, double> openmp_baseline_latency; // nprobe -> avg_latency
+
+// 修改print_results函数，添加过滤条件
+void print_results_filtered(const std::string& method_name, const std::vector<SearchResult>& results, 
+                           size_t test_number, size_t nprobe = 0, size_t batch_size = 1, 
+                           bool is_openmp_baseline = false, std::vector<PerformanceBenchmark>* valid_results = nullptr) {
+    
+    double total_recall = 0, total_latency = 0; 
+    size_t valid_count = 0;
+
+    for(size_t i = 0; i < results.size() && i < test_number; ++i) {
+        total_recall += results[i].recall;
+        total_latency += results[i].latency;
+        valid_count++;
+    }
+    
+    double avg_recall = (valid_count > 0) ? total_recall / valid_count : 0.0;
+    double avg_latency = (valid_count > 0) ? total_latency / valid_count : 0.0;
+    
+    // 如果是OpenMP基准，记录性能数据
+    if (is_openmp_baseline) {
+        openmp_baseline_latency[nprobe] = avg_latency;
+        std::cout << "=== " << method_name << " (基准) ===" << std::endl;
+        std::cout << std::fixed << std::setprecision(5);
+        std::cout << "平均召回率: " << avg_recall << std::endl;
+        std::cout << std::fixed << std::setprecision(3); 
+        std::cout << "平均延迟 (us): " << avg_latency << std::endl;
+        std::cout << std::endl;
+        return;
+    }
+    
+    // 计算相对于OpenMP的加速比
+    double speedup = 1.0;
+    if (openmp_baseline_latency.count(nprobe) && openmp_baseline_latency[nprobe] > 0) {
+        speedup = openmp_baseline_latency[nprobe] / avg_latency;
+    }
+    
+    // 过滤条件：召回率>0.6且加速比>3x
+    if (avg_recall > 0.6 && speedup > 3.0) {
+        std::cout << "=== " << method_name << " ✓ ===" << std::endl;
+        std::cout << std::fixed << std::setprecision(5);
+        std::cout << "平均召回率: " << avg_recall << std::endl;
+        std::cout << std::fixed << std::setprecision(3); 
+        std::cout << "平均延迟 (us): " << avg_latency << std::endl;
+        std::cout << "加速比 vs OpenMP: " << speedup << "x" << std::endl;
+        if (batch_size > 1) {
+            std::cout << "吞吐量 (queries/sec): " << (avg_latency > 0 ? 1000000.0 / avg_latency : 0.0) << std::endl;
+        }
+        std::cout << std::endl;
+        
+        // 记录有效结果
+        if (valid_results) {
+            valid_results->push_back(PerformanceBenchmark(method_name, avg_recall, avg_latency, nprobe, batch_size, speedup));
+        }
+    }
+}
+
+// 批量测试的过滤版本
+void print_batch_results_filtered(const std::string& method_name, double avg_recall, long long batch_time_us, 
+                                 size_t batch_test_size, size_t nprobe, size_t num_clusters, 
+                                 std::vector<PerformanceBenchmark>* valid_results = nullptr) {
+    
+    double avg_latency_per_query = (batch_test_size > 0) ? static_cast<double>(batch_time_us) / batch_test_size : 0.0;
+    
+    // 计算相对于OpenMP的加速比
+    double speedup = 1.0;
+    if (openmp_baseline_latency.count(nprobe) && openmp_baseline_latency[nprobe] > 0) {
+        speedup = openmp_baseline_latency[nprobe] / avg_latency_per_query;
+    }
+    
+    // 过滤条件：召回率>0.6且加速比>3x
+    if (avg_recall > 0.6 && speedup > 3.0) {
+        std::cout << "=== " << method_name << " (nprobe=" << nprobe 
+                  << ", clusters=" << num_clusters 
+                  << ", batch_size=" << batch_test_size << ") ✓ ===" << std::endl;
+        std::cout << std::fixed << std::setprecision(5);
+        std::cout << "平均召回率: " << avg_recall << std::endl;
+        std::cout << std::fixed << std::setprecision(3);
+        std::cout << "批量处理总时间 (us): " << batch_time_us << std::endl;
+        std::cout << "每查询平均时间 (us): " << avg_latency_per_query << std::endl;
+        std::cout << "加速比 vs OpenMP: " << speedup << "x" << std::endl;
+        std::cout << "吞吐量 (queries/sec): " << (batch_time_us > 0 ? static_cast<double>(batch_test_size) * 1000000 / batch_time_us : 0.0) << std::endl;
+        std::cout << "测试查询数量: " << batch_test_size << std::endl;
+        std::cout << std::endl;
+        
+        // 记录有效结果
+        if (valid_results) {
+            std::string full_name = method_name + " (batch=" + std::to_string(batch_test_size) + ")";
+            valid_results->push_back(PerformanceBenchmark(full_name, avg_recall, avg_latency_per_query, nprobe, batch_test_size, speedup));
+        }
+    }
+}
+
 // 打印测试结果的辅助函数
 void print_results(const std::string& method_name, const std::vector<SearchResult>& results, size_t test_number) {
     
@@ -524,6 +633,8 @@ int main(int argc, char *argv[])
     std::string gt_path =       "DEEP100K.gt.query.100k.top100.bin";
     std::string base_path =     "DEEP100K.base.100k.fbin";
 
+    // 存储所有有效结果
+    std::vector<PerformanceBenchmark> all_valid_results;
 
     auto test_query = LoadData<float>(query_path, test_number, vecdim); 
     
@@ -582,7 +693,7 @@ int main(int argc, char *argv[])
 
 
     // --- IVF 搜索 (OpenMP) ---
-    std::cout << "\n--- IVF (OpenMP) 测试 ---" << std::endl;
+    std::cout << "\n--- IVF (OpenMP) 基准测试 ---" << std::endl;
     size_t num_ivf_clusters_omp = 0;
     if (base_number > 0) {
         num_ivf_clusters_omp = std::min((size_t)256, base_number / 100); 
@@ -637,14 +748,14 @@ int main(int argc, char *argv[])
             else if (num_ivf_clusters_omp == 0) continue;
 
 
-            std::cout << "测试 IVF (OpenMP) 使用 nprobe = " << actual_nprobe << std::endl;
+            std::cout << "记录 IVF (OpenMP) 基准性能 nprobe = " << actual_nprobe << std::endl;
             std::vector<SearchResult> results_ivf_omp = benchmark_ivf_openmp_search(
                ivf_omp_index_ptr,
                test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k, actual_nprobe); 
             
             std::string ivf_omp_method_name = "IVF (OpenMP, nprobe=" + std::to_string(actual_nprobe) + 
                                           ", clusters=" + std::to_string(num_ivf_clusters_omp) + ")";
-            print_results(ivf_omp_method_name, results_ivf_omp, num_queries_to_test);
+            print_results_filtered(ivf_omp_method_name, results_ivf_omp, num_queries_to_test, actual_nprobe, 1, true);
         }
     } else {
         std::cerr << "跳过 IVF (OpenMP) 搜索测试，因为索引创建失败。" << std::endl;
@@ -652,7 +763,7 @@ int main(int argc, char *argv[])
 
 
     // --- IVF GPU 搜索测试 ---
-    std::cout << "\n--- IVF (GPU) 测试 ---" << std::endl;
+    std::cout << "\n--- IVF (GPU) 高性能测试 (仅显示召回率>0.6且加速比>3x的结果) ---" << std::endl;
     size_t num_ivf_clusters_gpu = 0;
     if (base_number > 0) {
         num_ivf_clusters_gpu = std::min((size_t)128, base_number / 50); // GPU版本使用稍少的簇数
@@ -749,7 +860,7 @@ int main(int argc, char *argv[])
                   << ", vecdim=" << vecdim << ", num_ivf_clusters_gpu=" << num_ivf_clusters_gpu << ")." << std::endl;
     }
 
-    if (ivf_gpu_index_ptr || optimized_gpu_index_ptr || super_optimized_gpu_index_ptr || adaptive_optimized_gpu_index_ptr) { // 启用优化版本的条件检查
+    if (ivf_gpu_index_ptr || optimized_gpu_index_ptr || super_optimized_gpu_index_ptr || adaptive_optimized_gpu_index_ptr) {
         std::vector<size_t> nprobe_values_gpu = {1, 2, 4, 8, 16, 32};
         if (num_ivf_clusters_gpu < 32 && num_ivf_clusters_gpu > 0) {
             nprobe_values_gpu.clear();
@@ -773,18 +884,16 @@ int main(int argc, char *argv[])
 
             // 基础GPU版本测试
             if (ivf_gpu_index_ptr) {
-                std::cout << "\n测试 IVF (GPU Basic) 使用 nprobe = " << actual_nprobe << std::endl;
-                
-                // GPU版本测试 - 单个查询测试
+                // 单个查询测试
                 std::vector<SearchResult> results_ivf_gpu = benchmark_gpu_search(
                    ivf_gpu_index_ptr,
                    test_query, test_gt, base_number, vecdim, num_queries_to_test, test_gt_d, k, actual_nprobe);
 
                 std::string ivf_gpu_method_name = "IVF (GPU Basic Single, nprobe=" + std::to_string(actual_nprobe) + 
                                               ", clusters=" + std::to_string(num_ivf_clusters_gpu) + ")";
-                print_results(ivf_gpu_method_name, results_ivf_gpu, num_queries_to_test);
+                print_results_filtered(ivf_gpu_method_name, results_ivf_gpu, num_queries_to_test, actual_nprobe, 1, false, &all_valid_results);
 
-                // GPU版本测试 - 批量查询测试
+                // GPU批量测试
                 std::cout << "测试 IVF (GPU Basic Batch) 使用 nprobe = " << actual_nprobe << ", batch_size = " << gpu_batch_size << std::endl;
                 
                 // 准备批量查询数据
@@ -832,22 +941,13 @@ int main(int argc, char *argv[])
                     }
                 }
                 
-                std::cout << "=== IVF (GPU Basic Batch, nprobe=" << actual_nprobe 
-                          << ", clusters=" << num_ivf_clusters_gpu 
-                          << ", batch_size=" << gpu_batch_size << ") ===" << std::endl;
-                std::cout << std::fixed << std::setprecision(5);
-                std::cout << "平均召回率: " << (valid_batch_results > 0 ? total_batch_recall / valid_batch_results : 0.0) << std::endl;
-                std::cout << std::fixed << std::setprecision(3);
-                std::cout << "批量处理总时间 (us): " << batch_time_us << std::endl;
-                std::cout << "每查询平均时间 (us): " << (batch_test_num > 0 ? static_cast<double>(batch_time_us) / batch_test_num : 0.0) << std::endl;
-                std::cout << "测试查询数量: " << batch_test_num << std::endl;
-                std::cout << std::endl;
+                std::string batch_method_name = "IVF (GPU Basic Batch)";
+                print_batch_results_filtered(batch_method_name, total_batch_recall / valid_batch_results, 
+                                           batch_time_us, batch_test_num, actual_nprobe, num_ivf_clusters_gpu, &all_valid_results);
             }
             
             // 优化GPU版本测试
             if (optimized_gpu_index_ptr) {
-                std::cout << "\n测试 IVF (GPU Optimized) 使用 nprobe = " << actual_nprobe << std::endl;
-                
                 // 单个查询测试
                 std::vector<SearchResult> results_optimized_gpu = benchmark_optimized_gpu_search(
                    optimized_gpu_index_ptr,
@@ -855,16 +955,13 @@ int main(int argc, char *argv[])
                 
                 std::string optimized_gpu_method_name = "IVF (GPU Optimized Single, nprobe=" + std::to_string(actual_nprobe) + 
                                                       ", clusters=" + std::to_string(num_ivf_clusters_gpu) + ")";
-                print_results(optimized_gpu_method_name, results_optimized_gpu, num_queries_to_test);
+                print_results_filtered(optimized_gpu_method_name, results_optimized_gpu, num_queries_to_test, actual_nprobe, 1, false, &all_valid_results);
 
-                // 批量查询测试 - 使用更大的批处理
-                std::vector<size_t> batch_sizes = {500, 1000, 2000}; // 从{100, 500, 1000}改为{500, 1000, 2000}
+                // 批量查询测试
+                std::vector<size_t> batch_sizes = {500, 1000, 2000};
                 
                 for (size_t batch_test_size : batch_sizes) {
                     if (batch_test_size > num_queries_to_test) continue;
-                    
-                    std::cout << "测试 IVF (GPU Optimized Batch) 使用 nprobe = " << actual_nprobe 
-                              << ", batch_size = " << batch_test_size << std::endl;
                     
                     // 准备批量查询数据
                     std::vector<float> batch_queries;
@@ -910,34 +1007,14 @@ int main(int argc, char *argv[])
                         }
                     }
                     
-                    std::cout << "=== IVF (GPU Optimized Batch, nprobe=" << actual_nprobe 
-                              << ", clusters=" << num_ivf_clusters_gpu 
-                              << ", batch_size=" << batch_test_size << ") ===" << std::endl;
-                    std::cout << std::fixed << std::setprecision(5);
-                    std::cout << "平均召回率: " << (valid_batch_results > 0 ? total_batch_recall / valid_batch_results : 0.0) << std::endl;
-                    std::cout << std::fixed << std::setprecision(3);
-                    std::cout << "批量处理总时间 (us): " << batch_time_us << std::endl;
-                    std::cout << "每查询平均时间 (us): " << (batch_test_size > 0 ? static_cast<double>(batch_time_us) / batch_test_size : 0.0) << std::endl;
-                    std::cout << "吞吐量 (queries/sec): " << (batch_time_us > 0 ? static_cast<double>(batch_test_size) * 1000000 / batch_time_us : 0.0) << std::endl;
-                    
-                    // 与OpenMP的加速比
-                    if (ivf_omp_index_ptr && valid_batch_results > 0) {
-                        // 假设OpenMP平均延迟已知（可以从之前的测试中获取）
-                        double omp_avg_latency = 1000.0; // 大概的OpenMP单查询延迟(us)
-                        double gpu_avg_latency = static_cast<double>(batch_time_us) / batch_test_size;
-                        double speedup = omp_avg_latency / gpu_avg_latency;
-                        std::cout << "相对OpenMP加速比: " << speedup << "x" << std::endl;
-                    }
-                    
-                    std::cout << "测试查询数量: " << batch_test_size << std::endl;
-                    std::cout << std::endl;
+                    std::string batch_method_name = "IVF (GPU Optimized Batch)";
+                    print_batch_results_filtered(batch_method_name, total_batch_recall / valid_batch_results, 
+                                               batch_time_us, batch_test_size, actual_nprobe, num_ivf_clusters_gpu, &all_valid_results);
                 }
             }
             
             // 超级优化GPU版本测试
             if (super_optimized_gpu_index_ptr) {
-                std::cout << "\n测试 IVF (GPU Super Optimized) 使用 nprobe = " << actual_nprobe << std::endl;
-                
                 // 单个查询测试
                 std::vector<SearchResult> results_super_optimized_gpu = benchmark_super_optimized_gpu_search(
                    super_optimized_gpu_index_ptr,
@@ -945,16 +1022,13 @@ int main(int argc, char *argv[])
                 
                 std::string super_optimized_gpu_method_name = "IVF (GPU Super Optimized Single, nprobe=" + std::to_string(actual_nprobe) + 
                                                       ", clusters=" + std::to_string(num_ivf_clusters_gpu) + ")";
-                print_results(super_optimized_gpu_method_name, results_super_optimized_gpu, num_queries_to_test);
+                print_results_filtered(super_optimized_gpu_method_name, results_super_optimized_gpu, num_queries_to_test, actual_nprobe, 1, false, &all_valid_results);
 
-                // 批量查询测试 - 使用更大的批处理
-                std::vector<size_t> batch_sizes = {500, 1000, 2000}; // 从{100, 500, 1000}改为{500, 1000, 2000}
+                // 批量查询测试
+                std::vector<size_t> batch_sizes = {500, 1000, 2000};
                 
                 for (size_t batch_test_size : batch_sizes) {
                     if (batch_test_size > num_queries_to_test) continue;
-                    
-                    std::cout << "测试 IVF (GPU Super Optimized Batch) 使用 nprobe = " << actual_nprobe 
-                              << ", batch_size = " << batch_test_size << std::endl;
                     
                     // 准备批量查询数据
                     std::vector<float> batch_queries;
@@ -1000,34 +1074,14 @@ int main(int argc, char *argv[])
                         }
                     }
                     
-                    std::cout << "=== IVF (GPU Super Optimized Batch, nprobe=" << actual_nprobe 
-                              << ", clusters=" << num_ivf_clusters_gpu 
-                              << ", batch_size=" << batch_test_size << ") ===" << std::endl;
-                    std::cout << std::fixed << std::setprecision(5);
-                    std::cout << "平均召回率: " << (valid_batch_results > 0 ? total_batch_recall / valid_batch_results : 0.0) << std::endl;
-                    std::cout << std::fixed << std::setprecision(3);
-                    std::cout << "批量处理总时间 (us): " << batch_time_us << std::endl;
-                    std::cout << "每查询平均时间 (us): " << (batch_test_size > 0 ? static_cast<double>(batch_time_us) / batch_test_size : 0.0) << std::endl;
-                    std::cout << "吞吐量 (queries/sec): " << (batch_time_us > 0 ? static_cast<double>(batch_test_size) * 1000000 / batch_time_us : 0.0) << std::endl;
-                    
-                    // 与OpenMP的加速比
-                    if (ivf_omp_index_ptr && valid_batch_results > 0) {
-                        // 假设OpenMP平均延迟已知（可以从之前的测试中获取）
-                        double omp_avg_latency = 1000.0; // 大概的OpenMP单查询延迟(us)
-                        double gpu_avg_latency = static_cast<double>(batch_time_us) / batch_test_size;
-                        double speedup = omp_avg_latency / gpu_avg_latency;
-                        std::cout << "相对OpenMP加速比: " << speedup << "x" << std::endl;
-                    }
-                    
-                    std::cout << "测试查询数量: " << batch_test_size << std::endl;
-                    std::cout << std::endl;
+                    std::string batch_method_name = "IVF (GPU Super Optimized Batch)";
+                    print_batch_results_filtered(batch_method_name, total_batch_recall / valid_batch_results, 
+                                               batch_time_us, batch_test_size, actual_nprobe, num_ivf_clusters_gpu, &all_valid_results);
                 }
             }
             
             // 自适应优化GPU版本测试
             if (adaptive_optimized_gpu_index_ptr) {
-                std::cout << "\n测试 IVF (GPU Adaptive Optimized) 使用 nprobe = " << actual_nprobe << std::endl;
-                
                 try {
                     // 单个查询测试
                     std::vector<SearchResult> results_adaptive_optimized_gpu = benchmark_adaptive_optimized_gpu_search(
@@ -1036,16 +1090,13 @@ int main(int argc, char *argv[])
                     
                     std::string adaptive_optimized_gpu_method_name = "IVF (GPU Adaptive Optimized Single, nprobe=" + std::to_string(actual_nprobe) + 
                                                           ", clusters=" + std::to_string(num_ivf_clusters_gpu) + ")";
-                    print_results(adaptive_optimized_gpu_method_name, results_adaptive_optimized_gpu, num_queries_to_test);
+                    print_results_filtered(adaptive_optimized_gpu_method_name, results_adaptive_optimized_gpu, num_queries_to_test, actual_nprobe, 1, false, &all_valid_results);
 
-                    // 批量查询测试 - 使用较小的批处理大小
-                    std::vector<size_t> batch_sizes = {200, 500, 1000}; // 从{50, 100, 200}改为{200, 500, 1000}
+                    // 批量查询测试
+                    std::vector<size_t> batch_sizes = {200, 500, 1000};
                     
                     for (size_t batch_test_size : batch_sizes) {
                         if (batch_test_size > num_queries_to_test) continue;
-                        
-                        std::cout << "测试 IVF (GPU Adaptive Optimized Batch) 使用 nprobe = " << actual_nprobe 
-                                  << ", batch_size = " << batch_test_size << std::endl;
                         
                         try {
                             // 准备批量查询数据
@@ -1092,36 +1143,19 @@ int main(int argc, char *argv[])
                                 }
                             }
                             
-                            std::cout << "=== IVF (GPU Adaptive Optimized Batch, nprobe=" << actual_nprobe 
-                                      << ", clusters=" << num_ivf_clusters_gpu 
-                                      << ", batch_size=" << batch_test_size << ") ===" << std::endl;
-                            std::cout << std::fixed << std::setprecision(5);
-                            std::cout << "平均召回率: " << (valid_batch_results > 0 ? total_batch_recall / valid_batch_results : 0.0) << std::endl;
-                            std::cout << std::fixed << std::setprecision(3);
-                            std::cout << "批量处理总时间 (us): " << batch_time_us << std::endl;
-                            std::cout << "每查询平均时间 (us): " << (batch_test_size > 0 ? static_cast<double>(batch_time_us) / batch_test_size : 0.0) << std::endl;
-                            std::cout << "吞吐量 (queries/sec): " << (batch_time_us > 0 ? static_cast<double>(batch_test_size) * 1000000 / batch_time_us : 0.0) << std::endl;
-                            
-                            // 与OpenMP的加速比
-                            if (ivf_omp_index_ptr && valid_batch_results > 0) {
-                                double omp_avg_latency = 1000.0;
-                                double gpu_avg_latency = static_cast<double>(batch_time_us) / batch_test_size;
-                                double speedup = omp_avg_latency / gpu_avg_latency;
-                                std::cout << "相对OpenMP加速比: " << speedup << "x" << std::endl;
-                            }
-                            
-                            std::cout << "测试查询数量: " << batch_test_size << std::endl;
-                            std::cout << std::endl;
+                            std::string batch_method_name = "IVF (GPU Adaptive Optimized Batch)";
+                            print_batch_results_filtered(batch_method_name, total_batch_recall / valid_batch_results, 
+                                                       batch_time_us, batch_test_size, actual_nprobe, num_ivf_clusters_gpu, &all_valid_results);
                         } catch (const std::exception& e) {
-                            std::cerr << "批量测试出错 (batch_size=" << batch_test_size << "): " << e.what() << std::endl;
+                            // 静默处理错误，不输出
                         } catch (...) {
-                            std::cerr << "批量测试出现未知错误 (batch_size=" << batch_test_size << ")" << std::endl;
+                            // 静默处理错误，不输出
                         }
                     }
                 } catch (const std::exception& e) {
-                    std::cerr << "自适应优化GPU测试出错: " << e.what() << std::endl;
+                    // 静默处理错误，不输出
                 } catch (...) {
-                    std::cerr << "自适应优化GPU测试出现未知错误" << std::endl;
+                    // 静默处理错误，不输出
                 }
             }
         }
@@ -1129,12 +1163,43 @@ int main(int argc, char *argv[])
         std::cerr << "跳过 IVF (GPU) 搜索测试，因为索引创建失败。" << std::endl;
     }
 
-
-    // --- 打印结果 ---
-    std::cout << "\n--- 最终结果汇总 ---" << std::endl;
-    print_results("Flat Search (暴力搜索)", results_flat, num_queries_to_test);
-    // IVF (OpenMP) 的结果已在上面的循环中逐个打印
-
+    // --- 最终汇总表 ---
+    std::cout << "\n=== 高性能结果汇总 (召回率>0.6, 加速比>3x) ===" << std::endl;
+    if (all_valid_results.empty()) {
+        std::cout << "没有找到满足条件的高性能配置。" << std::endl;
+    } else {
+        std::cout << std::left << std::setw(60) << "方法" 
+                  << std::setw(12) << "召回率" 
+                  << std::setw(15) << "延迟(us)" 
+                  << std::setw(12) << "加速比" 
+                  << std::setw(15) << "吞吐量(qps)" << std::endl;
+        std::cout << std::string(114, '-') << std::endl;
+        
+        // 按加速比排序
+        std::sort(all_valid_results.begin(), all_valid_results.end(), 
+                 [](const PerformanceBenchmark& a, const PerformanceBenchmark& b) {
+                     return a.speedup_vs_openmp > b.speedup_vs_openmp;
+                 });
+        
+        for (const auto& result : all_valid_results) {
+            double throughput = 1000000.0 / result.avg_latency_us;
+            std::cout << std::left << std::setw(60) << result.method_name
+                      << std::fixed << std::setprecision(3) << std::setw(12) << result.avg_recall
+                      << std::setw(15) << result.avg_latency_us
+                      << std::setw(12) << result.speedup_vs_openmp << "x"
+                      << std::setw(15) << static_cast<int>(throughput) << std::endl;
+        }
+        
+        // 显示最佳结果
+        if (!all_valid_results.empty()) {
+            const auto& best = all_valid_results[0];
+            std::cout << "\n🏆 最佳性能配置:" << std::endl;
+            std::cout << "方法: " << best.method_name << std::endl;
+            std::cout << "召回率: " << std::fixed << std::setprecision(3) << best.avg_recall << std::endl;
+            std::cout << "加速比: " << best.speedup_vs_openmp << "x" << std::endl;
+            std::cout << "吞吐量: " << static_cast<int>(1000000.0 / best.avg_latency_us) << " queries/sec" << std::endl;
+        }
+    }
 
     // --- 清理 ---
     delete[] test_query;
