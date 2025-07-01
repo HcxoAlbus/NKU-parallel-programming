@@ -35,6 +35,69 @@
 } while(0)
 #endif
 
+// 声明外部CUDA内核函数（这些函数在其他头文件中已经定义）
+extern __global__ void convert_inner_product_to_distance(float* distances, int total_elements);
+extern __global__ void find_top_n_clusters_fixed(const float* centroid_distances, int* top_clusters, 
+                                          int batch_size, int num_clusters, int nprobe);
+extern __global__ void calculate_gather_offsets_fixed(const int* top_clusters, const int* inverted_lists_offsets,
+                                               int* query_point_counts, int batch_size, int nprobe, int num_clusters);
+extern __global__ void gather_points_fixed(const int* top_clusters, const int* inverted_lists_offsets, 
+                                    const uint32_t* inverted_lists_data, const int* query_point_offsets,
+                                    uint32_t* selected_points, int batch_size, int nprobe, int num_clusters);
+extern __global__ void optimized_point_distances(const float* base_data, const float* queries,
+                                          const uint32_t* selected_points, const int* query_point_offsets,
+                                          float* point_distances, int batch_size, int dim);
+extern __global__ void batch_gpu_topk_selection_fixed(const float* point_distances, const uint32_t* selected_points,
+                                               const int* query_point_offsets, uint32_t* results, float* result_distances,
+                                               int batch_size, int k);
+
+// 自适应优化特有的新CUDA内核函数
+__global__ void gather_points_truncated(const int* top_clusters, const int* inverted_lists_offsets, 
+                                        const uint32_t* inverted_lists_data, const int* query_point_offsets,
+                                        uint32_t* selected_points, int batch_size, int nprobe, int num_clusters, size_t max_points) {
+    int query_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (query_idx >= batch_size) return;
+    
+    const int* query_clusters = top_clusters + query_idx * nprobe;
+    int start_offset = query_point_offsets[query_idx];
+    int end_offset = query_point_offsets[query_idx + 1];
+    int available_space = end_offset - start_offset;
+    
+    // 确保不超过分配的空间
+    if (start_offset + available_space > max_points) {
+        available_space = max_points - start_offset;
+        if (available_space <= 0) return;
+    }
+    
+    uint32_t* query_selected_points = selected_points + start_offset;
+    
+    int current_offset = 0;
+    for (int i = 0; i < nprobe && current_offset < available_space; ++i) {
+        int cluster_id = query_clusters[i];
+        if (cluster_id < num_clusters) {
+            int cluster_start = inverted_lists_offsets[cluster_id];
+            int cluster_size = inverted_lists_offsets[cluster_id + 1] - cluster_start;
+            
+            // 截断以适应可用空间
+            int copy_size = min(cluster_size, available_space - current_offset);
+            
+            for (int j = 0; j < copy_size; ++j) {
+                query_selected_points[current_offset + j] = inverted_lists_data[cluster_start + j];
+            }
+            current_offset += copy_size;
+        }
+    }
+}
+
+__global__ void truncate_query_points(int* query_point_counts, int batch_size, float truncate_factor, size_t max_points) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= batch_size) return;
+    
+    int original_count = query_point_counts[idx];
+    int truncated_count = (int)(original_count * truncate_factor);
+    query_point_counts[idx] = max(1, truncated_count);
+}
+
 // 内存自适应的GPU IVF实现
 class AdaptiveOptimizedIVFGPU {
 private:
@@ -85,7 +148,7 @@ public:
         // 获取GPU内存信息并动态调整
         size_t free_mem, total_mem;
         CUDA_CHECK(cudaMemGetInfo(&free_mem, &total_mem));
-        available_gpu_memory = free_mem * 0.8; // 保留20%作为安全边界
+        available_gpu_memory = free_mem * 0.6; // 更保守，保留40%作为安全边界
         
         printf("Available GPU memory: %zu MB\n", available_gpu_memory / (1024*1024));
         
@@ -97,8 +160,18 @@ public:
                              batch_size * 100 * (sizeof(uint32_t) + sizeof(float)) + // results
                              batch_size * 64 * sizeof(int); // top clusters
         
+        printf("Basic memory requirement: %zu MB\n", basic_memory / (1024*1024));
+        
+        if (basic_memory >= available_gpu_memory) {
+            printf("Error: Basic memory requirement exceeds available GPU memory\n");
+            exit(1);
+        }
+        
         size_t remaining_memory = available_gpu_memory - basic_memory;
-        base_memory_pool_size = remaining_memory * 0.9 / (sizeof(uint32_t) + sizeof(float));
+        // 更保守的内存池大小计算
+        size_t memory_pool_from_remaining = static_cast<size_t>(remaining_memory * 0.7 / (sizeof(uint32_t) + sizeof(float)));
+        size_t memory_pool_from_vectors = static_cast<size_t>(n_base * 0.5);
+        base_memory_pool_size = std::min(memory_pool_from_remaining, memory_pool_from_vectors);
         
         printf("Base memory pool size: %zu points\n", base_memory_pool_size);
         
@@ -397,7 +470,7 @@ public:
         }
         
         printf("Using adaptive batch size: %d, estimated points: %zu\n", 
-               adaptive_batch_size, estimated_points_per_batch);
+                adaptive_batch_size, estimated_points_per_batch);
         
         // 处理批量查询
         for (int batch_start = 0; batch_start < query_num; batch_start += adaptive_batch_size) {
@@ -488,7 +561,7 @@ private:
                                d_query_point_offsets, 
                                0);
 
-        // 4. 检查总选择点数
+        // 4. 检查总选择点数并进行截断处理
         int total_selected_points = 0;
         if (batch_size > 0) {
             int last_offset, last_count;
@@ -498,20 +571,40 @@ private:
                                   sizeof(int), cudaMemcpyDeviceToHost));
             
             total_selected_points = last_offset + last_count;
-            CUDA_CHECK(cudaMemcpy(d_query_point_offsets + batch_size, &total_selected_points, 
-                                  sizeof(int), cudaMemcpyHostToDevice));
         }
 
+        // 如果超过内存池容量，需要截断处理
         if (total_selected_points > max_points) {
-            printf("Warning: Still truncating points. Required: %d, Allocated: %zu\n", 
+            printf("Warning: Truncating points. Required: %d, Available: %zu\n", 
                    total_selected_points, max_points);
-            // 继续处理，但结果可能不完整
+            
+            // 计算截断因子
+            float truncate_factor = (float)max_points / total_selected_points;
+            
+            // 重新计算每个查询的点数（按比例缩减）
+            truncate_query_points<<<(batch_size + 255) / 256, 256>>>(
+                d_query_point_counts, batch_size, truncate_factor, max_points);
+            CUDA_CHECK(cudaGetLastError());
+            
+            // 重新计算偏移量
+            thrust::exclusive_scan(thrust::device, 
+                                   d_query_point_counts, 
+                                   d_query_point_counts + batch_size, 
+                                   d_query_point_offsets, 
+                                   0);
+            
+            // 更新总点数
+            total_selected_points = max_points;
         }
         
-        // 5. 在GPU上收集所有候选项
-        gather_points_fixed<<<(batch_size + 255) / 256, 256>>>(
+        // 设置最终的偏移量
+        CUDA_CHECK(cudaMemcpy(d_query_point_offsets + batch_size, &total_selected_points, 
+                              sizeof(int), cudaMemcpyHostToDevice));
+        
+        // 5. 在GPU上收集所有候选项（使用截断后的数据）
+        gather_points_truncated<<<(batch_size + 255) / 256, 256>>>(
             d_top_clusters_indices, d_inverted_lists_offsets, d_inverted_lists_data, 
-            d_query_point_offsets, d_selected_points, batch_size, nprobe, num_clusters);
+            d_query_point_offsets, d_selected_points, batch_size, nprobe, num_clusters, max_points);
         CUDA_CHECK(cudaGetLastError());
 
         // 6. 计算到这些点的距离
