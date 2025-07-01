@@ -35,13 +35,13 @@ clean:
 test_performance_ivf: 
 	@echo "=== Testing IVF CUDA with different optimization levels ==="
 	@echo "Building with -O0..."
-	$(NVCC) -std=c++14 -O0 -arch=sm_75 -lcublas -Xcompiler -fopenmp --expt-relaxed-constexpr --expt-extended-lambda -o $(TARGET_IVF)_O0 $(SOURCE_IVF)
+	$(NVCC) -std=c++14 -O0 -arch=sm_75 -lcublas -lcub -Xcompiler -fopenmp --expt-relaxed-constexpr --expt-extended-lambda -o $(TARGET_IVF)_O0 $(SOURCE_IVF)
 	@echo "Building with -O2..."
-	$(NVCC) -std=c++14 -O2 -arch=sm_75 -lcublas -Xcompiler -fopenmp --expt-relaxed-constexpr --expt-extended-lambda -o $(TARGET_IVF)_O2 $(SOURCE_IVF)
+	$(NVCC) -std=c++14 -O2 -arch=sm_75 -lcublas -lcub -Xcompiler -fopenmp --expt-relaxed-constexpr --expt-extended-lambda -o $(TARGET_IVF)_O2 $(SOURCE_IVF)
 	@echo "Building with -O3..."
-	$(NVCC) -std=c++14 -O3 -arch=sm_75 -lcublas -Xcompiler -fopenmp --expt-relaxed-constexpr --expt-extended-lambda -o $(TARGET_IVF)_O3 $(SOURCE_IVF)
+	$(NVCC) -std=c++14 -O3 -arch=sm_75 -lcublas -lcub -Xcompiler -fopenmp --expt-relaxed-constexpr --expt-extended-lambda -o $(TARGET_IVF)_O3 $(SOURCE_IVF)
 	@echo "Building with -O3 and fast math..."
-	$(NVCC) -std=c++14 -O3 -arch=sm_75 -lcublas -Xcompiler -fopenmp --use_fast_math --expt-relaxed-constexpr --expt-extended-lambda -o $(TARGET_IVF)_O3_fast $(SOURCE_IVF)
+	$(NVCC) -std=c++14 -O3 -arch=sm_75 -lcublas -lcub --use_fast_math -Xcompiler -fopenmp --expt-relaxed-constexpr --expt-extended-lambda -o $(TARGET_IVF)_O3_fast $(SOURCE_IVF)
 
 # Performance test with different optimization levels for original
 test_performance: 

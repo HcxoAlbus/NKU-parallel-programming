@@ -130,29 +130,23 @@ __global__ void fused_distance_and_topk(const float* __restrict__ base_data,
     int end_offset = query_offsets[query_idx + 1];
     int num_points_for_query = end_offset - start_offset;
 
-    // 在同一个核函数中进行距离计算和Top-K选择，减少内存访问
-    if (threadIdx.x == 0 && num_points_for_query > 0) {
+    // 只让第一个线程处理Top-K选择，其他线程协助计算距离
+    if (num_points_for_query > 0) {
         const uint32_t* query_indices = selected_points + start_offset;
         uint32_t* query_results = results + query_idx * k;
         float* query_result_dists = result_distances + query_idx * k;
         
-        // 使用堆来维护Top-K（更高效的方法）
-        for (int i = 0; i < k && i < num_points_for_query; ++i) {
-            uint32_t point_id = query_indices[i];
-            
-            float dot_product = 0.0f;
-            #pragma unroll 4
-            for (int d = 0; d < dim; ++d) {
-                dot_product += base_data[point_id * dim + d] * shared_query[d];
+        // 初始化结果
+        if (threadIdx.x == 0) {
+            for (int i = 0; i < k; ++i) {
+                query_result_dists[i] = FLT_MAX;
+                query_results[i] = 0;
             }
-            float distance = 1.0f - dot_product;
-            
-            query_result_dists[i] = distance;
-            query_results[i] = point_id;
         }
+        __syncthreads();
         
-        // 对于剩余的点，维护最小堆
-        for (int i = k; i < num_points_for_query; ++i) {
+        // 所有线程协作计算距离，但只有线程0维护Top-K
+        for (int i = threadIdx.x; i < num_points_for_query; i += blockDim.x) {
             uint32_t point_id = query_indices[i];
             
             float dot_product = 0.0f;
@@ -162,21 +156,30 @@ __global__ void fused_distance_and_topk(const float* __restrict__ base_data,
             }
             float distance = 1.0f - dot_product;
             
-            // 找到最大距离的位置
-            int max_idx = 0;
-            float max_dist = query_result_dists[0];
-            for (int j = 1; j < k; ++j) {
-                if (query_result_dists[j] > max_dist) {
-                    max_dist = query_result_dists[j];
-                    max_idx = j;
+            // 只有线程0更新Top-K结果
+            if (threadIdx.x == 0) {
+                // 检查是否应该插入到Top-K中
+                int insert_pos = -1;
+                for (int j = 0; j < k; ++j) {
+                    if (distance < query_result_dists[j]) {
+                        insert_pos = j;
+                        break;
+                    }
+                }
+                
+                if (insert_pos >= 0) {
+                    // 向右移动元素
+                    for (int j = k - 1; j > insert_pos; --j) {
+                        query_result_dists[j] = query_result_dists[j - 1];
+                        query_results[j] = query_results[j - 1];
+                    }
+                    query_result_dists[insert_pos] = distance;
+                    query_results[insert_pos] = point_id;
                 }
             }
             
-            // 如果当前距离更小，替换
-            if (distance < max_dist) {
-                query_result_dists[max_idx] = distance;
-                query_results[max_idx] = point_id;
-            }
+            // 同步以确保线程0完成更新
+            __syncthreads();
         }
     }
 }
@@ -226,20 +229,26 @@ public:
         : num_base_vectors(n_base), vector_dim(dim), num_clusters(n_clusters), 
           max_batch_size(batch_size), num_streams(4) {
         
-        // 动态调整内存分配策略
+        // 动态调整内存分配策略 - 更保守的估算
         size_t avg_points_per_cluster = n_base / n_clusters;
-        size_t max_nprobe = 32;  // 最大nprobe值
-        max_total_selected_points_in_batch = max_batch_size * avg_points_per_cluster * max_nprobe * 2;
+        size_t max_nprobe = 16;  // 减少最大nprobe值以节省内存
+        max_total_selected_points_in_batch = max_batch_size * avg_points_per_cluster * max_nprobe;
         
         // 获取GPU内存信息
         size_t free_mem, total_mem;
         CUDA_CHECK(cudaMemGetInfo(&free_mem, &total_mem));
         
-        // 根据可用内存调整分配策略
+        // 根据可用内存调整分配策略 - 更保守
         size_t required_mem = max_total_selected_points_in_batch * (sizeof(uint32_t) + sizeof(float));
-        if (required_mem > free_mem * 0.8) {
-            max_total_selected_points_in_batch = (free_mem * 0.6) / (sizeof(uint32_t) + sizeof(float));
+        if (required_mem > free_mem * 0.6) { // 从0.8改为0.6
+            max_total_selected_points_in_batch = (free_mem * 0.4) / (sizeof(uint32_t) + sizeof(float));
             printf("Adjusted memory allocation to fit GPU memory: %zu points\n", max_total_selected_points_in_batch);
+        }
+
+        // 确保最小可用内存
+        if (max_total_selected_points_in_batch < max_batch_size * 100) {
+            max_total_selected_points_in_batch = max_batch_size * 100;
+            printf("Warning: Using minimal memory allocation: %zu points\n", max_total_selected_points_in_batch);
         }
 
         // 初始化cuBLAS
@@ -575,14 +584,16 @@ private:
             CUDA_CHECK(cudaStreamSynchronize(stream));
             
             total_selected_points = last_offset + last_count;
+            
+            // 如果超出容量，截断但给出警告
+            if (total_selected_points > max_total_selected_points_in_batch) {
+                printf("Warning: Truncating points. Required: %d, Allocated: %zu. This may affect recall.\n", 
+                       total_selected_points, max_total_selected_points_in_batch);
+                total_selected_points = max_total_selected_points_in_batch;
+            }
+            
             CUDA_CHECK(cudaMemcpyAsync(d_query_point_offsets + batch_size, &total_selected_points, 
                                       sizeof(int), cudaMemcpyHostToDevice, stream));
-        }
-
-        if (total_selected_points > max_total_selected_points_in_batch) {
-            printf("Warning: Truncating points. Required: %d, Allocated: %zu\n", 
-                   total_selected_points, max_total_selected_points_in_batch);
-            // 仍然继续处理，但可能影响召回率
         }
         
         // 5. 在GPU上收集所有候选项
