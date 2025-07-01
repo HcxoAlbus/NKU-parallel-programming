@@ -280,8 +280,8 @@ private:
         
         if (best_pool) {
             best_pool->in_use = true;
-            printf("Selected memory pool level %d (capacity: %zu, required: %zu, waste: %zu)\n", 
-                   best_pool->pool_level, best_pool->capacity, required_size, min_waste);
+            //printf("Selected memory pool level %d (capacity: %zu, required: %zu, waste: %zu)\n", 
+                  // best_pool->pool_level, best_pool->capacity, required_size, min_waste);
         }
         return best_pool;
     }
@@ -335,12 +335,12 @@ private:
             MemoryPool* available_pool = get_optimal_memory_pool(total_required);
             if (available_pool) {
                 available_pool->in_use = false; // 释放，稍后真正使用时再分配
-                printf("Smart batch size selected: %d (requires %d points)\n", test_batch_size, total_required);
+               // printf("Smart batch size selected: %d (requires %d points)\n", test_batch_size, total_required);
                 return test_batch_size;
             }
             
             // 如果内存不够，尝试更小的批次
-            printf("Batch size %d requires %d points, trying smaller batch\n", test_batch_size, total_required);
+            //printf("Batch size %d requires %d points, trying smaller batch\n", test_batch_size, total_required);
             test_batch_size = std::max(1, test_batch_size / 2);
         }
         
@@ -357,7 +357,7 @@ public:
         int query_num = queries.size() / vector_dim;
         std::vector<std::vector<std::pair<float, uint32_t>>> results(query_num);
         
-        printf("Starting smart adaptive batch search for %d queries\n", query_num);
+       // printf("Starting smart adaptive batch search for %d queries\n", query_num);
         
         // 处理批量查询 - 使用动态批次大小，添加安全机制
         for (int batch_start = 0; batch_start < query_num; ) {
@@ -376,7 +376,7 @@ public:
             int batch_end = std::min(batch_start + smart_batch_size, query_num);
             int current_batch_size = batch_end - batch_start;
             
-            printf("Processing batch %d-%d (size: %d)\n", batch_start, batch_end-1, current_batch_size);
+           // printf("Processing batch %d-%d (size: %d)\n", batch_start, batch_end-1, current_batch_size);
             
             // 添加安全检查：如果批次大小异常，强制退出
             if (current_batch_size <= 0 || current_batch_size > max_batch_size) {
@@ -413,14 +413,14 @@ public:
                 success = process_batch_gpu_smart(d_queries, current_batch_size, k, nprobe);
                 if (!success) {
                     retry_count++;
-                    printf("Batch processing failed, retry %d/%d\n", retry_count, max_retries);
+                  //  printf("Batch processing failed, retry %d/%d\n", retry_count, max_retries);
                     
                     // 如果重试失败，尝试更小的批次
                     if (retry_count >= max_retries && current_batch_size > 1) {
                         current_batch_size = std::max(1, current_batch_size / 2);
                         batch_end = batch_start + current_batch_size;
                         retry_count = 0; // 重置重试计数
-                        printf("Reducing batch size to %d and retrying\n", current_batch_size);
+                   //     printf("Reducing batch size to %d and retrying\n", current_batch_size);
                         
                         // 重新复制较小的批次
                         CUDA_CHECK(cudaMemcpy(d_queries, queries.data() + batch_start * vector_dim,
@@ -465,8 +465,8 @@ public:
                 batch_start = batch_end;
             } else {
                 // 如果最终还是失败，跳过当前查询
-                printf("Warning: Failed to process queries %d-%d after all retries, skipping\n", 
-                       batch_start, batch_end-1);
+               // printf("Warning: Failed to process queries %d-%d after all retries, skipping\n", 
+               //        batch_start, batch_end-1);
                 for (int i = batch_start; i < batch_end; ++i) {
                     results[i] = std::vector<std::pair<float, uint32_t>>();
                 }
@@ -480,7 +480,7 @@ public:
             if (batch_start == last_batch_start) {
                 stuck_count++;
                 if (stuck_count > 5) {
-                    printf("Error: Detected infinite loop at batch_start=%d, forcing advance\n", batch_start);
+                  //  printf("Error: Detected infinite loop at batch_start=%d, forcing advance\n", batch_start);
                     batch_start++; // 强制前进
                     stuck_count = 0;
                 }
@@ -527,21 +527,21 @@ private:
         // 5. 获取合适的内存池，严格要求容量足够
         MemoryPool* selected_pool = get_optimal_memory_pool(total_required);
         if (!selected_pool) {
-            printf("No suitable memory pool for %d points (pools available: %zu)\n", 
-                   total_required, memory_pools.size());
+           // printf("No suitable memory pool for %d points (pools available: %zu)\n", 
+           //        total_required, memory_pools.size());
             
             // 打印所有内存池状态用于调试
             for (size_t i = 0; i < memory_pools.size(); ++i) {
-                printf("Pool %zu: capacity=%zu, in_use=%s, valid=%s\n", 
-                       i, memory_pools[i].capacity, 
-                       memory_pools[i].in_use ? "true" : "false",
-                       memory_pools[i].d_points ? "true" : "false");
+               // printf("Pool %zu: capacity=%zu, in_use=%s, valid=%s\n", 
+                 //      i, memory_pools[i].capacity, 
+                   //    memory_pools[i].in_use ? "true" : "false",
+                     //  memory_pools[i].d_points ? "true" : "false");
             }
             return false;
         }
 
-        printf("Using memory pool level %d (capacity: %zu) for %d points\n", 
-               selected_pool->pool_level, selected_pool->capacity, total_required);
+        //printf("Using memory pool level %d (capacity: %zu) for %d points\n", 
+         //      selected_pool->pool_level, selected_pool->capacity, total_required);
 
         // 6. 设置内存指针并更新偏移量
         d_selected_points = selected_pool->d_points;

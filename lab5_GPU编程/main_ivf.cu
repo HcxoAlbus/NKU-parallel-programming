@@ -658,7 +658,7 @@ int main(int argc, char *argv[])
         num_ivf_clusters_gpu = std::min((size_t)128, base_number / 50); // GPU版本使用稍少的簇数
         if (num_ivf_clusters_gpu == 0 && base_number > 0) num_ivf_clusters_gpu = std::min((size_t)1, base_number);
     }
-    size_t gpu_batch_size = 32; // GPU批处理大小
+    size_t gpu_batch_size = 2000; // GPU批处理大小
 
     SimpleIVFGPU* ivf_gpu_index_ptr = nullptr;
     OptimizedSimpleIVFGPU* optimized_gpu_index_ptr = nullptr; // 启用优化版本
@@ -687,13 +687,13 @@ int main(int argc, char *argv[])
         
         // 构建优化版GPU索引
         std::cout << "\n构建 IVF (GPU Optimized) 索引... num_clusters=" << num_ivf_clusters_gpu
-                  << ", batch_size=" << 128 << std::endl;
+                  << ", batch_size=" << 2000 << std::endl;
         gettimeofday(&build_start_gpu, NULL);
         try {
             optimized_gpu_index_ptr = new OptimizedSimpleIVFGPU(base, static_cast<int>(base_number), 
                                                          static_cast<int>(vecdim), 
                                                          static_cast<int>(num_ivf_clusters_gpu), 
-                                                         128); // 使用更大的批处理大小
+                                                         2000); // 从128改为2000
         } catch (const std::exception& e) {
             std::cerr << "创建 IVF (GPU Optimized) 索引时出错: " << e.what() << std::endl;
             optimized_gpu_index_ptr = nullptr;
@@ -706,13 +706,13 @@ int main(int argc, char *argv[])
         
         // 构建超级优化版GPU索引
         std::cout << "\n构建 IVF (GPU Super Optimized) 索引... num_clusters=" << num_ivf_clusters_gpu
-                  << ", batch_size=" << 128 << std::endl;
+                  << ", batch_size=" << 2000 << std::endl;
         gettimeofday(&build_start_gpu, NULL);
         try {
             super_optimized_gpu_index_ptr = new SuperOptimizedIVFGPU(base, static_cast<int>(base_number), 
                                                          static_cast<int>(vecdim), 
                                                          static_cast<int>(num_ivf_clusters_gpu), 
-                                                         128); // 使用更大的批处理大小
+                                                         2000); // 从128改为2000
         } catch (const std::exception& e) {
             std::cerr << "创建 IVF (GPU Super Optimized) 索引时出错: " << e.what() << std::endl;
             super_optimized_gpu_index_ptr = nullptr;
@@ -725,13 +725,13 @@ int main(int argc, char *argv[])
         
         // 构建自适应优化版GPU索引
         std::cout << "\n构建 IVF (GPU Adaptive Optimized) 索引... num_clusters=" << num_ivf_clusters_gpu
-                  << ", batch_size=" << 64 << std::endl; // 减小批处理大小
+                  << ", batch_size=" << 2000 << std::endl; // 从64改为2000
         gettimeofday(&build_start_gpu, NULL);
         try {
             adaptive_optimized_gpu_index_ptr = new AdaptiveOptimizedIVFGPU(base, static_cast<int>(base_number), 
                                                          static_cast<int>(vecdim), 
                                                          static_cast<int>(num_ivf_clusters_gpu), 
-                                                         64); // 使用较小的批处理大小以减少内存压力
+                                                         2000); // 从64改为2000
         } catch (const std::exception& e) {
             std::cerr << "创建 IVF (GPU Adaptive Optimized) 索引时出错: " << e.what() << std::endl;
             adaptive_optimized_gpu_index_ptr = nullptr;
@@ -789,7 +789,7 @@ int main(int argc, char *argv[])
                 
                 // 准备批量查询数据
                 std::vector<float> batch_queries;
-                size_t batch_test_num = std::min(num_queries_to_test, (size_t)100); // 测试100个查询的批量处理
+                size_t batch_test_num = std::min(num_queries_to_test, (size_t)2000); // 从100改为2000
                 batch_queries.reserve(batch_test_num * vecdim);
                 
                 for (size_t i = 0; i < batch_test_num; ++i) {
@@ -858,7 +858,7 @@ int main(int argc, char *argv[])
                 print_results(optimized_gpu_method_name, results_optimized_gpu, num_queries_to_test);
 
                 // 批量查询测试 - 使用更大的批处理
-                std::vector<size_t> batch_sizes = {100, 500, 1000}; // 测试不同批处理大小
+                std::vector<size_t> batch_sizes = {500, 1000, 2000}; // 从{100, 500, 1000}改为{500, 1000, 2000}
                 
                 for (size_t batch_test_size : batch_sizes) {
                     if (batch_test_size > num_queries_to_test) continue;
@@ -948,7 +948,7 @@ int main(int argc, char *argv[])
                 print_results(super_optimized_gpu_method_name, results_super_optimized_gpu, num_queries_to_test);
 
                 // 批量查询测试 - 使用更大的批处理
-                std::vector<size_t> batch_sizes = {100, 500, 1000}; // 测试不同批处理大小
+                std::vector<size_t> batch_sizes = {500, 1000, 2000}; // 从{100, 500, 1000}改为{500, 1000, 2000}
                 
                 for (size_t batch_test_size : batch_sizes) {
                     if (batch_test_size > num_queries_to_test) continue;
@@ -1039,7 +1039,7 @@ int main(int argc, char *argv[])
                     print_results(adaptive_optimized_gpu_method_name, results_adaptive_optimized_gpu, num_queries_to_test);
 
                     // 批量查询测试 - 使用较小的批处理大小
-                    std::vector<size_t> batch_sizes = {50, 100, 200}; // 减小批处理大小
+                    std::vector<size_t> batch_sizes = {200, 500, 1000}; // 从{50, 100, 200}改为{200, 500, 1000}
                     
                     for (size_t batch_test_size : batch_sizes) {
                         if (batch_test_size > num_queries_to_test) continue;
